@@ -21,6 +21,12 @@ Required. User must be the comment owner to delete the comment.
   The unique identifier of the post containing the comment (PostID)
 </ParamField>
 
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user who owns the comment to delete
+</ParamField>
+
 ## Behavior
 
 - Sets the isDeleted flag to true
@@ -33,7 +39,10 @@ Required. User must be the comment owner to delete the comment.
 ```bash
 curl -X DELETE https://api.example.com/api/posts/12345/comment \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe"
+  }'
 ```
 
 ## Response

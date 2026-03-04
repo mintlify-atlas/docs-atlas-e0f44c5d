@@ -21,6 +21,12 @@ Required. User must be authenticated to save a post.
   The unique identifier of the post to save (PostID)
 </ParamField>
 
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user saving the post
+</ParamField>
+
 ## Behavior
 
 - Creates a SavedPost record with composite key (SaverID, PostID)
@@ -33,7 +39,10 @@ Required. User must be authenticated to save a post.
 ```bash
 curl -X POST https://api.example.com/api/posts/12345/save \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe"
+  }'
 ```
 
 ## Response

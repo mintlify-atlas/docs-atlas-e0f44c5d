@@ -21,6 +21,12 @@ Required. User must be authenticated to unsave a post.
   The unique identifier of the post to unsave (PostID)
 </ParamField>
 
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user unsaving the post
+</ParamField>
+
 ## Behavior
 
 - Removes the SavedPost record for the user and post
@@ -31,7 +37,10 @@ Required. User must be authenticated to unsave a post.
 ```bash
 curl -X DELETE https://api.example.com/api/posts/12345/save \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe"
+  }'
 ```
 
 ## Response

@@ -21,6 +21,12 @@ Required. User must be authenticated to unlike a post.
   The unique identifier of the post to unlike (PostID)
 </ParamField>
 
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user removing the like
+</ParamField>
+
 ## Behavior
 
 - Uses a database transaction for atomic operation to ensure data consistency
@@ -33,7 +39,10 @@ Required. User must be authenticated to unlike a post.
 ```bash
 curl -X DELETE https://api.example.com/api/posts/12345/like \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe"
+  }'
 ```
 
 ## Response

@@ -21,6 +21,12 @@ Required. User must be authenticated to like a post.
   The unique identifier of the post to like (PostID)
 </ParamField>
 
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user liking the post
+</ParamField>
+
 ## Behavior
 
 - Creates a PostLike record with composite key (LikerID, PostID)
@@ -33,7 +39,10 @@ Required. User must be authenticated to like a post.
 ```bash
 curl -X POST https://api.example.com/api/posts/12345/like \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe"
+  }'
 ```
 
 ## Response

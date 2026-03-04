@@ -23,7 +23,11 @@ Required. User must be authenticated to comment on a post.
 
 ## Request Body
 
-<ParamField body="CommentText" type="string" required>
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user making the comment
+</ParamField>
+
+<ParamField body="commentText" type="string" required>
   The text content of the comment. Maximum length: 1000 characters
 </ParamField>
 
@@ -41,6 +45,7 @@ curl -X POST https://api.example.com/api/posts/12345/comment \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
+    "userName": "johndoe",
     "commentText": "Great post!"
   }'
 ```
