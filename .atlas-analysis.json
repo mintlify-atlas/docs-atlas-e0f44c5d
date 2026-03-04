@@ -1,0 +1,136 @@
+{
+  "projectType": "api-service",
+  "projectName": "Social Media Activity Feed API",
+  "projectDescription": "A high-performance RESTful API for social graphs, follower feeds, and interaction primitives built with ASP.NET Core Minimal APIs.",
+  "theme": "aspen",
+  "primaryColor": "#3B82F6",
+  "lightColor": "#60A5FA",
+  "darkColor": "#1E40AF",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["introduction", "quickstart", "installation"]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/authentication",
+              "concepts/pagination",
+              "concepts/database-design"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/user-management",
+              "guides/social-graph",
+              "guides/posts-interactions",
+              "guides/activity-feed"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": ["api/auth/register", "api/auth/login"]
+          },
+          {
+            "group": "User Management",
+            "pages": ["api/users/update", "api/users/delete"]
+          },
+          {
+            "group": "Follow Graph",
+            "pages": [
+              "api/follow/follow-user",
+              "api/follow/unfollow-user",
+              "api/follow/get-followers",
+              "api/follow/get-following"
+            ]
+          },
+          {
+            "group": "Block Graph",
+            "pages": ["api/block/block-user", "api/block/unblock-user"]
+          },
+          {
+            "group": "Close Friends",
+            "pages": [
+              "api/close-friends/add",
+              "api/close-friends/remove"
+            ]
+          },
+          {
+            "group": "Posts",
+            "pages": [
+              "api/posts/create-post",
+              "api/posts/get-post",
+              "api/posts/delete-post",
+              "api/posts/restore-post"
+            ]
+          },
+          {
+            "group": "Interactions",
+            "pages": [
+              "api/interactions/like-post",
+              "api/interactions/unlike-post",
+              "api/interactions/comment-post",
+              "api/interactions/delete-comment",
+              "api/interactions/save-post",
+              "api/interactions/unsave-post"
+            ]
+          },
+          {
+            "group": "Feed & Notifications",
+            "pages": [
+              "api/feed/get-feed",
+              "api/notifications/get-notifications"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "JWT Bearer Authentication",
+    "Cursor-based Pagination for Activity Feed",
+    "Composite Primary Keys for Data Integrity",
+    "Minimal API with Feature-Module Organization",
+    "Social Graph (Follow/Block/Close Friends)",
+    "Post Interactions (Likes/Comments/Saves)",
+    "N+1 Query Prevention via Projection",
+    "Atomic Operations for Relationship Toggles"
+  ],
+  "publicApiSurface": [
+    "POST /api/register",
+    "POST /api/login",
+    "PUT /api/users/{username}",
+    "DELETE /api/users/{username}",
+    "POST /api/users/{creatorUsername}/follow",
+    "DELETE /api/users/{creatorUsername}/follow",
+    "GET /api/users/{username}/followers",
+    "GET /api/users/{username}/following",
+    "POST /api/users/{username}/block",
+    "DELETE /api/users/{username}/block",
+    "POST /api/users/{username}/close-friends",
+    "DELETE /api/users/{username}/close-friends",
+    "POST /api/posts",
+    "GET /api/posts/{id}",
+    "DELETE /api/posts/{id}",
+    "POST /api/posts/{id}/restore",
+    "POST /api/posts/{id}/like",
+    "DELETE /api/posts/{id}/like",
+    "POST /api/posts/{id}/comment",
+    "DELETE /api/posts/{id}/comment",
+    "POST /api/posts/{id}/save",
+    "DELETE /api/posts/{id}/save",
+    "GET /api/feed/{username}",
+    "GET /api/notifications"
+  ]
+}
