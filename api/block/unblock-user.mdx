@@ -1,0 +1,58 @@
+---
+title: 'Unblock user'
+description: 'Remove a user from your block list'
+---
+
+## Endpoint
+
+```
+DELETE /api/users/{username}/block
+```
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user to unblock
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the account initiating the unblock action
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X DELETE https://api.example.com/api/users/johndoe/block \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "yourUsername"
+  }'
+```
+
+## Response
+
+<ResponseField name="status" type="number">
+  Returns `204 No Content` on successful unblock
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="404 Not Found" type="error">
+  - `"This account does not exist"` - The initiating account was not found
+  - `"This user does not exist"` - The target username was not found
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Returned when attempting to unblock yourself
+</ResponseField>
+
+<ResponseField name="409 Conflict" type="error">
+  `"Account does not block this user"` - The user is not currently blocked
+</ResponseField>

@@ -1,0 +1,222 @@
+---
+title: "Architecture"
+description: "Understand the architectural design of the Social Media Activity Feed API"
+---
+
+## Overview
+
+The Social Media Activity Feed API is built using **ASP.NET Core Minimal APIs**, a lightweight approach to building HTTP APIs without the overhead of traditional MVC controllers. This architecture emphasizes simplicity, performance, and clarity in organizing domain logic.
+
+## ASP.NET Core Minimal APIs Approach
+
+Minimal APIs provide a streamlined way to create HTTP endpoints with minimal ceremony. Instead of controller classes, endpoints are defined as lambda expressions or local functions, registered directly with the application's routing system.
+
+Key benefits:
+- **Reduced boilerplate**: No need for controller attributes or action methods
+- **Performance**: Less abstraction means faster startup and request processing
+- **Simplicity**: Endpoints are co-located with their domain logic
+
+## Feature-Module Organization
+
+Rather than organizing code by technical layers (controllers, services, repositories), this API uses a **feature-module** structure. Each feature owns its routes, logic, and data access.
+
+### Directory Structure
+
+The `features/` directory contains domain-organized modules:
+
+```
+features/
+├── auth/
+│   ├── auth.endpoints.cs       # Registration, login, user management
+│   ├── auth.tokenProvider.cs   # JWT token generation
+│   └── auth.dtos.cs            # Request/response models
+├── feed/
+│   └── feed.action.cs          # Activity feed with cursor pagination
+├── follow/
+│   ├── follow.action.cs        # Follow/unfollow actions
+│   └── follow.list.cs          # Followers/following lists
+├── block/
+│   └── block.action.cs         # Block/unblock actions
+├── closeFriend/
+│   └── closeFriend.action.cs   # Close friends management
+├── posts/
+│   ├── post.action.cs          # Post CRUD, likes, comments, saves
+│   └── post.dtos.cs            # Post-related DTOs
+└── notification/
+    └── notification.action.cs   # Notification retrieval
+```
+
+### Benefits of Feature Modules
+
+From the README:
+
+- **Routing close to behavior**: Each feature owns its routes, making it easy to understand what endpoints exist and what they do
+- **Compile-time discoverability**: Simple navigation inside the repository - if you want to understand how follows work, everything is in `features/follow/`
+- **Thin composition root**: `Program.cs` remains minimal, simply wiring together features
+
+## Endpoint Registration Pattern
+
+Features expose extension methods on `WebApplication` to register their endpoints. This keeps `Program.cs` clean and delegates routing logic to feature modules.
+
+### Program.cs Structure
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+// Configure services
+builder.Services.AddDbContext<SocialMediaDataContext>(
+    options => options.UseSqlite("Data Source = social.db"));
+builder.Services.AddScoped<IPasswordHasher<string>, PasswordHasher<string>>();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(jwtOptions => jwtOptions.TokenValidationParameters = 
+        new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Issuer"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? string.Empty))
+        });
+builder.Services.AddSingleton<ITokenProvider, TokenProvider>();
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+// Register middleware
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Register feature endpoints via extension methods
+app.UseAuth();
+app.UseFollowActionEndpoints();
+app.UseFollowListEndpoints();
+app.UseBlockActionEndpoints();
+app.UseCloseFriendActionEndpoints();
+app.UsePostActionEndpoints();
+app.UseNotificationActionEndpoints();
+app.UseFeedAction();
+
+app.Run();
+```
+
+### Extension Method Pattern
+
+Each feature module implements a static extension method:
+
+```csharp
+public static class AuthExtension
+{
+    public static void UseAuth(this WebApplication app)
+    {
+        app.MapPost("/api/register", async (RegisterRequest registerRequest, 
+            SocialMediaDataContext context, 
+            IPasswordHasher<string> passwordHasher) =>
+        {
+            // Registration logic...
+            return Results.Created();
+        });
+
+        app.MapPost("/api/login", async (LoginRequest request, 
+            SocialMediaDataContext context, 
+            IPasswordHasher<string> passwordHasher, 
+            ITokenProvider tokenProvider) =>
+        {
+            // Login logic...
+            return Results.Ok(responseData);
+        }).RequireAuthorization();
+
+        // More endpoints...
+    }
+}
+```
+
+This pattern:
+- Encapsulates feature-specific routing logic
+- Supports dependency injection through endpoint parameters
+- Allows features to be added/removed by simply calling or not calling their extension method
+- Keeps `Program.cs` focused on configuration, not implementation
+
+## Tech Stack
+
+### Backend Framework
+- **ASP.NET Core**: Cross-platform, high-performance web framework
+- **Minimal APIs**: Lightweight routing without MVC overhead
+
+### Authentication
+- **JWT Bearer Authentication**: Stateless authentication via signed tokens
+- **ASP.NET Core Identity PasswordHasher**: Secure password hashing (PBKDF2)
+
+### Data Access
+- **Entity Framework Core**: Modern object-relational mapper (ORM)
+- **LINQ**: Expressive, type-safe queries
+- **Projection with `.Select()`**: Avoids N+1 queries and shapes API responses
+- **`.AsNoTracking()`**: Optimizes read-only queries by disabling change tracking
+
+### Database
+- **SQLite**: Lightweight, file-based database for development
+- Future-ready for PostgreSQL migration in production
+
+## Query Optimization Patterns
+
+From the README:
+
+### N+1 Query Prevention
+
+The API uses several strategies to avoid the N+1 query problem:
+
+- **Projection (`.Select()`)**: Shapes API responses and fetches only needed columns
+- **`.AsNoTracking()`**: Applied to read-only queries to reduce change-tracker overhead
+- **Targeted `.Include()`**: Used sparingly when entity graphs must be materialized
+
+Example from feed endpoint:
+
+```csharp
+var posts = await query
+    .Select(s => new { 
+        s.PostID, s.InitiatorID, s.Caption, s.CreatedAt, 
+        s.LikeCount, s.PostMediasLinks, s.Comments, s.PostLikes 
+    })
+    .OrderByDescending(p => p.CreatedAt)
+    .ThenByDescending(p => p.PostID)
+    .Take(limit + 1)
+    .ToListAsync();
+```
+
+This ensures:
+- Predictable DB round-trips
+- Controlled memory usage
+- Intentional response payloads
+
+### Atomic Operations
+
+Where correctness matters (unfollow, unlike), operations use explicit transactions:
+
+```csharp
+using var transaction = context.Database.BeginTransaction();
+try
+{
+    await context.PostLikes
+        .Where(l => l.LikerID == result.likerId && l.PostID == postToUnlike.PostID)
+        .ExecuteDeleteAsync();
+    postToUnlike.LikeCount--;
+    await context.SaveChangesAsync();
+    await transaction.CommitAsync();
+}
+catch (Exception)
+{
+    await transaction.RollbackAsync();
+    throw;
+}
+```
+
+This prevents counts and rows from getting out of sync on partial failure.
+
+## Key Design Principles
+
+1. **Simplicity over abstraction**: Use minimal APIs and feature modules instead of layered architecture
+2. **Performance by default**: Leverage projections, no-tracking queries, and cursor pagination
+3. **Data integrity**: Use composite primary keys and transactions where correctness matters
+4. **Type safety**: Leverage C# and LINQ for compile-time validation
+5. **Explicit over implicit**: Extension methods make feature registration visible and controllable

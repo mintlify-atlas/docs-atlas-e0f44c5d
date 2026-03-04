@@ -1,0 +1,63 @@
+---
+title: "Save post"
+description: "Save a post to your saved collection"
+---
+
+Saves a post to the user's saved collection for later viewing.
+
+## Endpoint
+
+```
+POST /api/posts/{id}/save
+```
+
+## Authentication
+
+Required. User must be authenticated to save a post.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the post to save (PostID)
+</ParamField>
+
+## Behavior
+
+- Creates a SavedPost record with composite key (SaverID, PostID)
+- Allows users to bookmark posts for later viewing
+- Prevents saving posts from blocked accounts
+- Each user can only save a post once
+
+## Request
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/save \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+## Response
+
+<ResponseField name="status" type="integer">
+  201 Created - Post saved successfully
+</ResponseField>
+
+```json
+201 Created
+```
+
+## Errors
+
+<ResponseField name="404" type="error">
+  Post or account does not exist, or action cannot be completed due to a block
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  The user already saved the post
+</ResponseField>
+
+```json
+{
+  "error": "The user already saved post"
+}
+```

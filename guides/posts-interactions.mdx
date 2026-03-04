@@ -1,0 +1,355 @@
+---
+title: Posts and interactions
+description: Create posts and enable user interactions
+---
+
+## Creating posts
+
+Create a new post with caption and media links.
+
+```bash
+curl -X POST https://api.example.com/api/posts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe",
+    "caption": "Beautiful sunset at the beach!",
+    "PostMediasLinkInputs": [
+      {
+        "mediaType": "Image",
+        "mediaURL": "https://cdn.example.com/images/sunset1.jpg"
+      },
+      {
+        "mediaType": "Video",
+        "mediaURL": "https://cdn.example.com/videos/waves.mp4"
+      }
+    ]
+  }'
+```
+
+**Response:**
+
+```
+201 Created
+```
+
+### Post structure
+
+A post consists of:
+
+- `postID` (long) - Auto-generated unique identifier
+- `initiatorID` (long) - User who created the post
+- `caption` (string, max 800 chars) - Post caption text
+- `createdAt` (DateTime) - Creation timestamp
+- `likeCount` (int) - Number of likes
+- `isDeleted` (bool) - Soft delete flag
+- `PostMediasLinks` (array) - Array of media objects
+
+### Media types
+
+Each media item has:
+- `mediaType` - Either "Image" or "Video"
+- `mediaURL` - Full URL to the media resource
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist
+- `409 Conflict` - Cannot post on behalf of another user
+
+## Getting posts
+
+Retrieve a specific post by ID with all associated data.
+
+```bash
+curl -X GET https://api.example.com/api/posts/12345 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "postOwnerUserName": "johndoe",
+  "postOwnerPfpUrl": "https://example.com/profiles/john.jpg",
+  "DateCreated": "2026-03-04T10:30:00Z",
+  "LikesCount": 42,
+  "postCaption": "Beautiful sunset at the beach!",
+  "postMedias": [
+    {
+      "PostMediaID": 1,
+      "PostID": 12345,
+      "MediaType": "Image",
+      "MediaURL": "https://cdn.example.com/images/sunset1.jpg"
+    }
+  ],
+  "postComments": [
+    {
+      "commentID": 100,
+      "PostID": 12345,
+      "CommenterID": 456,
+      "CommentText": "Amazing view!",
+      "LikeCount": 5,
+      "CreatedAt": "2026-03-04T11:00:00Z",
+      "isDeleted": false
+    }
+  ],
+  "isSaved": true
+}
+```
+
+**Error responses:**
+
+- `404 Not Found` - Post does not exist, is deleted, or blocked
+
+## Deleting posts
+
+Soft delete a post. The post is marked as deleted but not removed from the database.
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**What happens:**
+- `isDeleted` flag is set to `true`
+- `DeletedAt` timestamp is recorded
+- Post becomes invisible in feeds and queries
+
+**Error responses:**
+
+- `404 Not Found` - Post does not exist
+- `409 Conflict` - User does not own the post
+- `403 Forbidden` - Post already deleted
+
+## Restoring deleted posts
+
+Restore a soft-deleted post.
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/restore \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**What happens:**
+- `isDeleted` flag is set to `false`
+- `DeletedAt` is set to `null`
+- Post becomes visible again
+
+## Liking posts
+
+Add a like to a post.
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/like \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+**Response:**
+
+```
+201 Created
+```
+
+**What happens:**
+- A `PostLike` record is created with composite key `(LikerID, PostID)`
+- Post's `likeCount` is incremented
+- A like notification is sent to the post owner
+
+**Error responses:**
+
+- `404 Not Found` - Post does not exist or blocked
+- `409 Conflict` - Already liked this post
+
+## Unliking posts
+
+Remove a like from a post. This operation uses a transactional delete to ensure atomicity.
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345/like \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**Atomic operation:**
+
+The unlike operation is wrapped in a transaction to ensure data consistency:
+
+```csharp
+using var transaction = context.Database.BeginTransaction();
+try
+{
+    await context.PostLikes
+        .Where(l => l.LikerID == result.likerId && l.PostID == postToUnlike.PostID)
+        .ExecuteDeleteAsync();
+    postToUnlike.LikeCount--;
+    await context.SaveChangesAsync();
+    await transaction.CommitAsync();
+}
+catch (Exception)
+{
+    await transaction.RollbackAsync();
+    throw;
+}
+```
+
+This prevents the like count and like record from getting out of sync on failure.
+
+**Error responses:**
+
+- `404 Not Found` - Post does not exist or blocked
+- `409 Conflict` - Post not currently liked
+
+## Commenting on posts
+
+Add a comment to a post.
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/comment \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "janedoe",
+    "commentText": "This is absolutely stunning!"
+  }'
+```
+
+**Response:**
+
+```
+201 Created
+```
+
+**What happens:**
+- A `Comment` entity is created
+- Comment text is limited to 1000 characters
+- A comment notification is sent to the post owner
+
+**Comment structure:**
+- `commentID` (long) - Unique identifier
+- `postID` (long) - Associated post
+- `commenterID` (long) - User who commented
+- `commentText` (string, max 1000 chars) - Comment content
+- `likeCount` (int) - Number of likes on the comment
+- `createdAt` (DateTime) - Creation timestamp
+- `isDeleted` (bool) - Soft delete flag
+
+**Error responses:**
+
+- `404 Not Found` - Post or user does not exist, or blocked
+
+## Deleting comments
+
+Soft delete a comment.
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345/comment \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "janedoe",
+    "commentText": "This is absolutely stunning!"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**What happens:**
+- Comment is marked as deleted
+- `DeletedAt` timestamp is set
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist or blocked
+- `409 Conflict` - Comment does not exist
+
+## Saving posts
+
+Save a post to your saved collection.
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/save \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+**Response:**
+
+```
+201 Created
+```
+
+**What happens:**
+- A `SavedPost` record is created with composite key `(SaverID, PostID)`
+- Post is added to user's saved collection
+
+**Error responses:**
+
+- `404 Not Found` - Post does not exist or blocked
+- `409 Conflict` - Post already saved
+
+## Unsaving posts
+
+Remove a post from your saved collection.
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345/save \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**Error responses:**
+
+- `404 Not Found` - Post does not exist or blocked
+- `409 Conflict` - Post was not saved

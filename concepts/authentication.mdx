@@ -1,0 +1,353 @@
+---
+title: "Authentication"
+description: "Learn how JWT authentication works in the API"
+---
+
+## Overview
+
+The Social Media Activity Feed API uses **JWT (JSON Web Token) Bearer Authentication** to secure endpoints. This provides stateless, scalable authentication where the server doesn't need to maintain session state.
+
+## JWT Bearer Authentication
+
+JWT authentication works by:
+1. User provides credentials (username/password)
+2. Server validates credentials and generates a signed JWT
+3. Client includes the JWT in subsequent requests
+4. Server validates the token signature and extracts user claims
+
+### Token Validation Configuration
+
+The API configures JWT validation in `Program.cs:19`:
+
+```csharp
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(jwtOptions => 
+        jwtOptions.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,              // Validate server that generates the token
+            ValidateAudience = true,            // Validate intended recipient
+            ValidateIssuerSigningKey = true,    // Validate signature
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Issuer"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? string.Empty))
+        });
+```
+
+Configuration requirements:
+- `Jwt:Issuer`: Identifies the token issuer
+- `Jwt:Key`: Secret key for signing tokens (use `dotnet user-secrets` for local development)
+
+## Registration Flow
+
+### Endpoint: POST /api/register
+
+Creates a new user account with hashed password.
+
+**Request Body:**
+```json
+{
+  "userName": "johndoe",
+  "firstName": "John",
+  "lastName": "Doe",
+  "passwordHash": "MySecurePassword123",
+  "email": "john@example.com",
+  "phoneNumber": "+1234567890",
+  "profileImage_MediaUrl": "https://example.com/avatar.jpg"
+}
+```
+
+**Implementation (auth.endpoints.cs:10):**
+
+```csharp
+app.MapPost("/api/register", async (RegisterRequest registerRequest, 
+    SocialMediaDataContext context, 
+    IPasswordHasher<string> passwordHasher) =>
+{
+    // Hash the password using ASP.NET Core Identity's PasswordHasher
+    string passwordHash = passwordHasher.HashPassword(string.Empty, registerRequest.passwordHash);
+    
+    User newUser = new User
+    {
+        UserName = registerRequest.userName,
+        FirstName = registerRequest.firstName,
+        LastName = registerRequest.lastName,
+        PasswordHash = passwordHash,
+        Email = registerRequest.email,
+        PhoneNumber = registerRequest.phoneNumber,
+        FollowersCount = default,
+        FollowingCount = default,
+        AccountDeleted = default,
+        DeletedAt = null
+    };
+    
+    newUser.UserProfile = new UserProfile
+    {
+        User = newUser,
+        PushNotifications = default,
+        AccountPrivacy = default,
+        Verified = default
+    };
+    
+    context.Users.Add(newUser);
+    await context.SaveChangesAsync();
+    return Results.Created();
+});
+```
+
+**Response:**
+- **201 Created**: User successfully registered
+- **400 Bad Request**: Validation errors (invalid email/phone format)
+- **409 Conflict**: Username/email already exists (handled by database unique constraints)
+
+### Password Hashing with IPasswordHasher
+
+The API uses ASP.NET Core Identity's `IPasswordHasher<string>` (registered in Program.cs:18), which implements PBKDF2 with:
+- Random salt per password
+- Configurable iteration count
+- Built-in versioning for algorithm upgrades
+
+## Login Flow
+
+### Endpoint: POST /api/login
+
+Authenticates user and returns JWT access token.
+
+**Request Body:**
+```json
+{
+  "username": "johndoe",
+  "providedPassword": "MySecurePassword123"
+}
+```
+
+**Implementation (auth.endpoints.cs:39):**
+
+```csharp
+app.MapPost("/api/login", async (LoginRequest request, 
+    SocialMediaDataContext context, 
+    IPasswordHasher<string> passwordHasher, 
+    ITokenProvider tokenProvider) =>
+{
+    // Fetch user by username
+    var user = await context.Users
+        .Where(u => u.UserName == request.Username)
+        .Select(s => new { 
+            s.UserID, s.UserName, s.LastName, s.PhoneNumber, 
+            s.PasswordHash, s.Email, s.FirstName, s.ProfileImage_MediaUrl 
+        })
+        .FirstOrDefaultAsync();
+
+    if (user is null) 
+        return Results.NotFound(new AuthResponse { 
+            loginResult = null, 
+            accessToken = string.Empty 
+        });
+    
+    // Verify password
+    var passwordResult = passwordHasher.VerifyHashedPassword(
+        string.Empty, 
+        user.PasswordHash, 
+        request.ProvidedPassword ?? string.Empty);
+    bool isValid = passwordResult != PasswordVerificationResult.Failed;
+    
+    if (!isValid) return Results.Unauthorized();
+
+    // Generate JWT token
+    string token = tokenProvider.Create(
+        user.UserID, 
+        user.UserName, 
+        user.Email, 
+        user.PhoneNumber);
+    
+    LoginResult resultData = new LoginResult { 
+        userID = user.UserID, 
+        userName = user.UserName, 
+        firstName = user.FirstName, 
+        lastName = user.LastName, 
+        email = user.Email ?? string.Empty, 
+        phoneNumber = user.PhoneNumber ?? string.Empty, 
+        profileImage_MediaUrl = user.ProfileImage_MediaUrl ?? string.Empty 
+    };
+    
+    AuthResponse responseData = new AuthResponse { 
+        loginResult = resultData, 
+        accessToken = token 
+    };
+    
+    return Results.Ok(responseData);
+});
+```
+
+**Response:**
+```json
+{
+  "loginResult": {
+    "userID": 123,
+    "userName": "johndoe",
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john@example.com",
+    "phoneNumber": "+1234567890",
+    "profileImage_MediaUrl": "https://example.com/avatar.jpg"
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Status Codes:**
+- **200 OK**: Login successful, returns user data and token
+- **404 Not Found**: Username not found
+- **401 Unauthorized**: Invalid password
+
+## Token Generation
+
+### TokenProvider Implementation (auth.tokenProvider.cs:12)
+
+```csharp
+public class TokenProvider(IConfiguration configuration) : ITokenProvider
+{
+    public string Create(long userId, string username, string? email, string? phoneNumber)
+    {
+        // Get secret key from configuration
+        string secretKey = configuration["Jwt:Key"] ?? string.Empty;
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+        
+        // Create signing credentials
+        var credentials = new SigningCredentials(
+            securityKey, 
+            SecurityAlgorithms.HmacSha256);
+        
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity([
+                // Primary unique identifier
+                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+                // Social/Auth identifiers
+                new Claim(JwtRegisteredClaimNames.UniqueName, username),
+                new Claim(JwtRegisteredClaimNames.Email, email ?? string.Empty),
+                new Claim(JwtRegisteredClaimNames.PhoneNumber, phoneNumber ?? string.Empty),
+            ]),
+            Expires = DateTime.UtcNow.AddMinutes(60),  // 1 hour expiration
+            SigningCredentials = credentials,
+            Issuer = configuration["Jwt:Issuer"],
+            Audience = configuration["Jwt:Issuer"]
+        };
+        
+        var handler = new JsonWebTokenHandler();
+        string token = handler.CreateToken(tokenDescriptor);
+        return token;
+    }
+}
+```
+
+### Token Claims
+
+Each JWT contains:
+- **sub** (Subject): User ID (primary identifier)
+- **unique_name**: Username
+- **email**: User's email address
+- **phone_number**: User's phone number
+- **exp** (Expiration): Token expiration timestamp (60 minutes)
+- **iss** (Issuer): Token issuer from configuration
+- **aud** (Audience): Token audience (same as issuer)
+
+## Using Protected Endpoints
+
+### Including the Authorization Header
+
+Once you have a token, include it in the `Authorization` header with the `Bearer` scheme:
+
+```bash
+curl -X GET https://api.example.com/api/feed/johndoe \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+### Marking Endpoints as Protected
+
+Endpoints require authentication by calling `.RequireAuthorization()`:
+
+```csharp
+app.MapGet("/api/feed/{username}", async (string username, 
+    SocialMediaDataContext context, 
+    string? cursor, 
+    int limit = 20) =>
+{
+    // Feed logic...
+}).RequireAuthorization();  // This endpoint requires a valid JWT
+```
+
+### Authentication Flow
+
+1. Client sends request with `Authorization: Bearer <token>` header
+2. ASP.NET Core authentication middleware extracts and validates token
+3. If valid, middleware populates `HttpContext.User` with claims
+4. If invalid/missing, middleware returns **401 Unauthorized**
+5. Endpoint handler receives authenticated user context
+
+## Complete Authentication Example
+
+### 1. Register a New User
+
+```bash
+curl -X POST https://api.example.com/api/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "janedoe",
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "passwordHash": "SecurePass456",
+    "email": "jane@example.com",
+    "phoneNumber": "+19876543210"
+  }'
+```
+
+**Response:** `201 Created`
+
+### 2. Login to Get Token
+
+```bash
+curl -X POST https://api.example.com/api/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "janedoe",
+    "providedPassword": "SecurePass456"
+  }'
+```
+
+**Response:**
+```json
+{
+  "loginResult": {
+    "userID": 124,
+    "userName": "janedoe",
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "email": "jane@example.com",
+    "phoneNumber": "+19876543210",
+    "profileImage_MediaUrl": ""
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjQiLCJ1bmlxdWVfbmFtZSI6ImphbmVkb2UiLCJlbWFpbCI6ImphbmVAZXhhbXBsZS5jb20iLCJwaG9uZV9udW1iZXIiOiIrMTk4NzY1NDMyMTAiLCJleHAiOjE3MDk1ODEyMDB9.abc123xyz"
+}
+```
+
+### 3. Access Protected Endpoint
+
+```bash
+curl -X POST https://api.example.com/api/users/johndoe/follow \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+**Response:** `204 No Content` (Follow successful)
+
+## Security Considerations
+
+- **Token Expiration**: Tokens expire after 60 minutes - clients must re-authenticate
+- **Secret Key Storage**: Use `dotnet user-secrets` locally, environment variables in production
+- **HTTPS Required**: Always use HTTPS in production to prevent token interception
+- **Password Hashing**: PBKDF2 with random salt prevents rainbow table attacks
+- **No Password in Responses**: Password hashes are never returned in API responses

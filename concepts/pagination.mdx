@@ -1,0 +1,366 @@
+---
+title: "Pagination"
+description: "Understand cursor-based pagination for activity feeds"
+---
+
+## Overview
+
+The Social Media Activity Feed API uses **cursor-based pagination** (also called keyset pagination) for the activity feed endpoint. This approach provides stable, high-performance pagination that scales better than traditional offset-based pagination.
+
+## Cursor Pagination vs Offset Pagination
+
+### Why Cursor Pagination?
+
+From the README:
+
+**Stable performance at scale**: 
+- Offset pagination (`OFFSET n LIMIT m`) forces the database to scan and skip `n` rows before returning results
+- As feeds grow, skipping thousands of rows becomes increasingly expensive
+- Cursor pagination uses indexed `WHERE` clauses that perform consistently regardless of page depth
+
+**Better consistency under writes**:
+- With offset pagination, new posts inserted while paginating can cause duplicates or skipped items
+- Cursor pagination uses a deterministic "seek" predicate based on the last seen item
+- Results remain consistent even when new posts are added during pagination
+
+### How It Works
+
+Cursor pagination encodes the position in the result set using values from the last returned item:
+
+1. **Initial request**: No cursor provided, returns first page
+2. **Response includes cursor**: Encodes the last item's position (CreatedAt timestamp + PostID)
+3. **Next request**: Client passes cursor back to get next page
+4. **Query uses cursor**: Database seeks to items after the cursor position
+
+## Cursor Format
+
+The cursor encodes two values from the last post in the current page:
+
+```json
+{
+  "dateTime": "2026-03-04T10:30:45.123Z",
+  "lastId": 12345
+}
+```
+
+This JSON is then **Base64 URL-safe encoded** to create an opaque cursor string:
+
+```
+eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTA6MzA6NDUuMTIzWiIsImxhc3RJZCI6MTIzNDV9
+```
+
+### Why Two Values?
+
+Using both `CreatedAt` (timestamp) and `PostID` ensures:
+- **Uniqueness**: Two posts might have the same timestamp
+- **Deterministic ordering**: Breaking ties with PostID ensures consistent sort order
+- **Efficiency**: CreatedAt is indexed for fast range queries
+
+## Implementation
+
+### Cursor Encoding/Decoding (feed.action.cs:59)
+
+```csharp
+public sealed record Cursor(DateTime dateTime, long lastId)
+{
+    public static string Encode(DateTime dateTime, long lastId)
+    {
+        var cursor = new Cursor(dateTime, lastId);
+        string json = JsonSerializer.Serialize(cursor);
+        return Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(json));
+    }
+    
+    public static Cursor? Decode(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor))
+        {
+            return null;
+        }
+        try
+        {
+            string json = Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(cursor));
+            return JsonSerializer.Deserialize<Cursor>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+```
+
+### Feed Query Pattern (feed.action.cs:10)
+
+```csharp
+app.MapGet("/api/feed/{username}", async (string username, 
+    SocialMediaDataContext context, 
+    string? cursor, 
+    int limit = 20) =>
+{
+    DateTime? cursorTime = default;
+    long? cursorId = default;
+    
+    // Decode cursor if provided
+    if (!string.IsNullOrWhiteSpace(cursor))
+    {
+        var decodedCursor = Cursor.Decode(cursor);
+        if (decodedCursor is null)
+        {
+            return Results.BadRequest();
+        }
+        cursorTime = decodedCursor.dateTime;
+        cursorId = decodedCursor.lastId;
+    }
+
+    // Get list of users this user follows
+    var followedIds = await context.Users
+        .AsNoTracking()
+        .Where(u => u.UserName == username)
+        .SelectMany(s => s.FollowingAccounts.Select(f => f.FollowedUserID))
+        .ToListAsync();
+
+    // Query posts from followed users
+    var query = context.Posts
+        .AsNoTracking()
+        .Where(p => followedIds.Contains(p.InitiatorID));
+
+    // Apply cursor predicate if provided
+    if (cursorTime.HasValue && cursorId.HasValue)
+    {
+        // Seek to items AFTER the cursor position:
+        // CreatedAt < cursorTime OR (CreatedAt == cursorTime AND PostID <= cursorId)
+        query = query.Where(x => 
+            x.CreatedAt < cursorTime || 
+            x.CreatedAt == cursorTime && x.PostID <= cursorId);
+    }
+    
+    // Fetch limit + 1 to determine if more results exist
+    var posts = await query
+        .Select(s => new { 
+            s.PostID, s.InitiatorID, s.Caption, s.CreatedAt, 
+            s.LikeCount, s.PostMediasLinks, s.Comments, s.PostLikes 
+        })
+        .OrderByDescending(p => p.CreatedAt)
+        .ThenByDescending(p => p.PostID)
+        .Take(limit + 1)
+        .ToListAsync();
+
+    if (posts is null) return Results.Conflict();
+    
+    var hasMore = posts.Count > limit;
+    DateTime? nextDateTime = posts.Count > limit ? posts[^1].CreatedAt : null;
+    long? nextId = posts.Count > limit ? posts[^1].PostID : null;
+    
+    // Remove extra item if fetched
+    if (hasMore) posts.RemoveAt(posts.Count - 1);
+    
+    return Results.Ok(new
+    {
+        Posts = posts,
+        Cursor = nextDateTime is not null && nextId is not null 
+            ? Cursor.Encode(nextDateTime.Value, nextId.Value) 
+            : null,
+        HasMore = hasMore
+    });
+}).RequireAuthorization();
+```
+
+### Query Pattern Breakdown
+
+The cursor predicate implements the "seek" pattern:
+
+```csharp
+query = query.Where(x => 
+    x.CreatedAt < cursorTime ||                      // Posts older than cursor
+    x.CreatedAt == cursorTime && x.PostID <= cursorId  // Same time, lower/equal ID
+);
+```
+
+Combined with ordering:
+
+```csharp
+.OrderByDescending(p => p.CreatedAt)
+.ThenByDescending(p => p.PostID)
+```
+
+This translates to SQL like:
+
+```sql
+SELECT * FROM Posts
+WHERE InitiatorID IN (/* followed user IDs */)
+  AND (CreatedAt < @cursorTime 
+       OR (CreatedAt = @cursorTime AND PostID <= @cursorId))
+ORDER BY CreatedAt DESC, PostID DESC
+LIMIT 21
+```
+
+The database can use indexes efficiently because it's seeking to a specific position, not skipping rows.
+
+## Response Structure
+
+### Feed Response Format
+
+```json
+{
+  "posts": [
+    {
+      "postID": 12345,
+      "initiatorID": 678,
+      "caption": "Beautiful sunset today!",
+      "createdAt": "2026-03-04T18:30:00Z",
+      "likeCount": 42,
+      "postMediasLinks": [
+        {
+          "postMediaID": 1,
+          "postID": 12345,
+          "mediaType": 0,
+          "mediaURL": "https://cdn.example.com/sunset.jpg"
+        }
+      ],
+      "comments": [],
+      "postLikes": []
+    },
+    {
+      "postID": 12344,
+      "initiatorID": 890,
+      "caption": "Just finished my morning run!",
+      "createdAt": "2026-03-04T17:15:00Z",
+      "likeCount": 23,
+      "postMediasLinks": [],
+      "comments": [],
+      "postLikes": []
+    }
+  ],
+  "cursor": "eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTc6MTU6MDBaIiwibGFzdElkIjoxMjM0NH0",
+  "hasMore": true
+}
+```
+
+### Response Fields
+
+- **posts**: Array of post objects (up to `limit` items)
+- **cursor**: Opaque cursor string for fetching the next page (null if no more results)
+- **hasMore**: Boolean indicating whether more results exist
+
+## Request Examples
+
+### First Page (No Cursor)
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=20" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Query Parameters:**
+- `limit` (optional, default=20): Number of posts to return per page
+
+### Subsequent Pages (With Cursor)
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?cursor=eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTc6MTU6MDBaIiwibGFzdElkIjoxMjM0NH0&limit=20" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Query Parameters:**
+- `cursor`: Opaque cursor string from previous response
+- `limit` (optional, default=20): Number of posts per page
+
+### Complete Pagination Example
+
+```javascript
+const fetchFeed = async (username, token) => {
+  let allPosts = [];
+  let cursor = null;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const url = cursor 
+      ? `https://api.example.com/api/feed/${username}?cursor=${cursor}&limit=20`
+      : `https://api.example.com/api/feed/${username}?limit=20`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    const data = await response.json();
+    allPosts = allPosts.concat(data.posts);
+    cursor = data.cursor;
+    hasMore = data.hasMore;
+  }
+  
+  return allPosts;
+};
+```
+
+## Performance Characteristics
+
+### Index Requirements
+
+For optimal performance, the Posts table has an index on `InitiatorID` (Post.cs:5):
+
+```csharp
+[Index(nameof(InitiatorID))]
+public class Post
+{
+    // ...
+}
+```
+
+This allows the database to efficiently:
+1. Filter posts by followed user IDs
+2. Seek to the cursor position using CreatedAt/PostID
+3. Sort results in the correct order
+
+### Query Complexity
+
+- **First page**: O(log n) seek + O(limit) fetch
+- **Subsequent pages**: O(log n) seek + O(limit) fetch
+- **No difference in performance** between page 1 and page 1000
+
+Compare to offset pagination:
+- **First page**: O(limit) fetch
+- **Page 1000**: O(1000 * limit) scan + O(limit) fetch
+
+### Fetching limit + 1
+
+The query fetches one extra item:
+
+```csharp
+.Take(limit + 1)
+```
+
+This allows efficient `HasMore` detection:
+- If `posts.Count > limit`, more results exist
+- Remove the extra item before returning
+- No need for a separate `COUNT(*)` query
+
+## Error Handling
+
+### Invalid Cursor
+
+If the cursor cannot be decoded:
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?cursor=invalid" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Response:** `400 Bad Request`
+
+### Missing Authentication
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=20"
+```
+
+**Response:** `401 Unauthorized`
+
+## Best Practices
+
+1. **Treat cursors as opaque**: Don't parse or modify cursor strings client-side
+2. **Cache cursors**: Store cursor with fetched data to support "load more" functionality
+3. **Default limit**: Use reasonable page sizes (10-50 items) to balance latency and round-trips
+4. **Handle null cursor**: When `cursor` is `null`, you've reached the end of the feed
+5. **Check hasMore**: Use this flag for UI state (hide "Load More" button when false)

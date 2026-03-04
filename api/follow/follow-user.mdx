@@ -1,0 +1,72 @@
+---
+title: "Follow user"
+description: "Follow another user to see their posts in your feed"
+---
+
+## Endpoint
+
+```
+POST /api/users/{creatorUsername}/follow
+```
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="creatorUsername" type="string" required>
+  The username of the user to follow
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user initiating the follow action
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="number">
+  204 No Content on successful follow
+</ResponseField>
+
+### Response Details
+
+When a user successfully follows another user:
+- A Follow record is created with a composite key (FollowerID, FollowedUserID)
+- The followed user's `FollowersCount` is incremented
+- The follower's `FollowingCount` is incremented
+- A notification is triggered for the followed user
+- The composite key prevents duplicate follows in the database
+
+## Request Example
+
+```bash cURL
+curl -X POST "https://api.example.com/api/users/johndoe/follow" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+## Error Responses
+
+<ResponseField name="400" type="error">
+  Bad Request - Invalid request format
+</ResponseField>
+
+<ResponseField name="404" type="error">
+  Not Found - User does not exist or action cannot be completed due to a block
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  Conflict - Account already follows this user
+</ResponseField>
+
+### Error Scenarios
+
+- **404 Not Found**: Returned when the initiating account doesn't exist, the target user doesn't exist, or when the action cannot be completed due to a block between users
+- **409 Conflict**: Returned when the user is already following the target user
+- **403 Forbidden**: Returned when a user attempts to follow themselves

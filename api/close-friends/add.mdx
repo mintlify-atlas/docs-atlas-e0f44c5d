@@ -1,0 +1,70 @@
+---
+title: 'Add close friend'
+description: 'Add a user to your close friends list'
+---
+
+## Endpoint
+
+```
+POST /api/users/{username}/close-friends
+```
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user to add to close friends
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the account initiating the add action
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X POST https://api.example.com/api/users/johndoe/close-friends \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "yourUsername"
+  }'
+```
+
+## Response
+
+<ResponseField name="status" type="number">
+  Returns `204 No Content` on successful addition
+</ResponseField>
+
+### CloseFriend Object
+
+The add action creates a CloseFriend record with a composite key:
+
+<ResponseField name="AddingUserID" type="integer">
+  The user ID of the account initiating the add action
+</ResponseField>
+
+<ResponseField name="CloseFriendAccountId" type="integer">
+  The user ID of the close friend account
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="404 Not Found" type="error">
+  - `"This account does not exist"` - The initiating account was not found
+  - `"This user does not exist"` - The target username was not found
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Returned when attempting to add yourself to close friends
+</ResponseField>
+
+<ResponseField name="409 Conflict" type="error">
+  `"Account already added this user."` - The user is already in your close friends list
+</ResponseField>

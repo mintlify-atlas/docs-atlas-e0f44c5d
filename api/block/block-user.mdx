@@ -1,0 +1,70 @@
+---
+title: 'Block user'
+description: 'Block a user to prevent them from interacting with you'
+---
+
+## Endpoint
+
+```
+POST /api/users/{username}/block
+```
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user to block
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the account initiating the block action
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X POST https://api.example.com/api/users/johndoe/block \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "yourUsername"
+  }'
+```
+
+## Response
+
+<ResponseField name="status" type="number">
+  Returns `204 No Content` on successful block
+</ResponseField>
+
+### BlockedAccount Object
+
+The block action creates a BlockedAccount record with a composite key:
+
+<ResponseField name="BlockingUserID" type="integer">
+  The user ID of the account initiating the block
+</ResponseField>
+
+<ResponseField name="BlockedAccountId" type="integer">
+  The user ID of the blocked account
+</ResponseField>
+
+## Error Responses
+
+<ResponseField name="404 Not Found" type="error">
+  - `"This account does not exist"` - The initiating account was not found
+  - `"This user does not exist"` - The target username was not found
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Returned when attempting to block yourself
+</ResponseField>
+
+<ResponseField name="409 Conflict" type="error">
+  `"Account already blocked this user"` - The user is already blocked
+</ResponseField>

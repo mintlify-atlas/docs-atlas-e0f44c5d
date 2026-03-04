@@ -1,0 +1,517 @@
+---
+title: "Database design"
+description: "Explore the database schema and design decisions"
+---
+
+## Overview
+
+The Social Media Activity Feed API uses a relational database schema designed to model social graphs, content interactions, and activity feeds efficiently. The schema leverages composite primary keys, self-referencing relationships, and strategic indexing for optimal performance.
+
+## Entity Relationship Diagram
+
+The complete database schema is documented in the ERD diagram:
+
+![Social Media Activity Feed ERD](https://github.com/0xfelaback/Social-Media-Activity-Feed/blob/main/Social-Media-Activity-Feed-ERD.drawio.png)
+
+*Reference: [`Social-Media-Activity-Feed-ERD.drawio.png`](https://github.com/0xfelaback/Social-Media-Activity-Feed/blob/main/Social-Media-Activity-Feed-ERD.drawio.png) in the source repository*
+
+## Composite Primary Keys
+
+One of the key architectural decisions is using **composite primary keys** (CPKs) for relationship and interaction tables.
+
+### Why Composite Keys?
+
+From the README:
+
+- **Prevents duplicates at the database level**: No "double follow" or "double like" rows possible
+- **Supports efficient existence checks**: Database can quickly verify if a relationship exists
+- **Simplifies application logic**: The database enforces the invariant, reducing edge cases
+
+### Examples from the Codebase
+
+#### Follow Table (User.cs:84)
+
+```csharp
+public class Follow
+{
+    public long FollowerID { get; set; }
+    public long FollowedUserID { get; set; }
+    
+    [JsonIgnore]
+    public User Follower { get; set; } = null!;
+    [JsonIgnore]
+    public User Followed { get; set; } = null!;
+}
+```
+
+Configured in DbContext with:
+
+```csharp
+modelBuilder.Entity<Follow>()
+    .HasKey(f => new { f.FollowerID, f.FollowedUserID });
+```
+
+This ensures:
+- User A can only follow User B once
+- Lookups like "Does A follow B?" use the primary key index
+- Deletes like "A unfollows B" are efficient key-based operations
+
+#### BlockedAccount Table (User.cs:95)
+
+```csharp
+[Table("Blocked_Accounts")]
+public class BlockedAccount
+{
+    public long BlockingUserID { get; set; }
+    [JsonIgnore]
+    public User BlockingUser { get; set; } = null!;
+    
+    public long BlockedAccountId { get; set; }
+    [JsonIgnore]
+    public User Blocked_Account { get; set; } = null!;
+}
+```
+
+Configured with:
+
+```csharp
+modelBuilder.Entity<BlockedAccount>()
+    .HasKey(b => new { b.BlockingUserID, b.BlockedAccountId });
+```
+
+#### CloseFriend Table (User.cs:106)
+
+```csharp
+[Table("Close_Friends")]
+public class CloseFriend
+{
+    public long AddingUserID { get; set; }
+    [JsonIgnore]
+    public User AddingUser { get; set; } = null!;
+
+    public long CloseFriendAccountId { get; set; }
+    [JsonIgnore]
+    public User CloseFriendAccount { get; set; } = null!;
+}
+```
+
+Configured with:
+
+```csharp
+modelBuilder.Entity<CloseFriend>()
+    .HasKey(c => new { c.AddingUserID, c.CloseFriendAccountId });
+```
+
+#### SavedPost Table (Post.cs:30)
+
+```csharp
+[Index(nameof(PostID), nameof(SaverID))]
+[PrimaryKey(nameof(SaverID), nameof(PostID))]  // Data annotation approach
+[Table("Saved_Posts")]
+public class SavedPost
+{
+    public long SaverID { get; set; }
+    [ForeignKey(nameof(SaverID))]
+    public User Saver { get; set; } = null!;
+
+    public long PostID { get; set; }
+    [ForeignKey(nameof(PostID))]
+    public Post Post { get; set; } = null!;
+}
+```
+
+#### PostLike Table (Post.cs:64)
+
+```csharp
+[PrimaryKey(nameof(LikerID), nameof(PostID))]
+[Table("Post_Likes")]
+public class PostLike
+{
+    public long LikerID { get; set; }
+    [Required]
+    [ForeignKey(nameof(LikerID))]
+    public User Liker { get; set; } = null!;
+    
+    [Required]
+    public long PostID { get; set; }
+    [ForeignKey(nameof(PostID))]
+    public Post Post { get; set; } = null!;
+    
+    public DateTime CreatedAt { get; set; }
+}
+```
+
+## Self-Referencing Relationships
+
+The social graph uses **self-referencing many-to-many relationships** where users relate to other users.
+
+### User Model (User.cs:7)
+
+```csharp
+[Index(nameof(UserName), IsUnique = true)]
+public class User
+{
+    [Key]
+    public long UserID { get; set; }
+    
+    [MaxLength(25)]
+    [Required(ErrorMessage = "Username is a required field")]
+    public string UserName { get; set; } = null!;
+    
+    [MaxLength(50)]
+    [Required(ErrorMessage = "Firstname is a required field")]
+    public string FirstName { get; set; } = null!;
+    
+    [MaxLength(50)]
+    [Required(ErrorMessage = "Lastname is a required field")]
+    public string LastName { get; set; } = null!;
+    
+    [EmailAddress(ErrorMessage = "Invalid Email Address.")]
+    public string? Email { get; set; }
+    
+    [Phone(ErrorMessage = "Invalid Phone Number")]
+    public string? PhoneNumber { get; set; }
+    
+    [Url(ErrorMessage = "Invalid URL Format")]
+    public string? ProfileImage_MediaUrl { get; set; }
+    
+    [Required]
+    public int FollowersCount { get; set; }
+    
+    [Required]
+    public int FollowingCount { get; set; }
+    
+    [MaxLength(200)]
+    public string? Bio { get; set; }
+    
+    [MaxLength(255)]
+    [Required]
+    public string PasswordHash { get; set; } = null!;
+    
+    [Required]
+    public DateTime CreatedAt { get; set; }
+    
+    [Required]
+    public bool AccountDeleted { get; set; }
+    
+    public DateTime? DeletedAt { get; set; }
+    
+    // Self-referencing relationships via join tables
+    public virtual ICollection<Follow> FollowingAccounts { get; set; } = new List<Follow>();
+    public virtual ICollection<Follow> FollowersAccounts { get; set; } = new List<Follow>();
+    
+    public virtual ICollection<BlockedAccount> BlockedAccounts { get; set; } = new List<BlockedAccount>();
+    public virtual ICollection<BlockedAccount> AccountBlockedBy { get; set; } = new List<BlockedAccount>();
+    
+    public virtual ICollection<CloseFriend> AddedCloseFriends { get; set; } = new List<CloseFriend>();
+    public virtual ICollection<CloseFriend> AddedAsCloseFriendBy { get; set; } = new List<CloseFriend>();
+    
+    // Content relationships
+    public virtual ICollection<Post> UserPosts { get; set; } = new List<Post>();
+    public virtual ICollection<SavedPost> UserSavedPosts { get; set; } = new List<SavedPost>();
+    public virtual ICollection<PostLike> UserLikedPosts { get; set; } = new List<PostLike>();
+    public virtual ICollection<Comment> UserComments { get; set; } = new List<Comment>();
+    
+    // Messaging and notifications
+    public virtual ICollection<Message> MessagesSent { get; set; } = new List<Message>();
+    public virtual ICollection<Message> MessagesReceived { get; set; } = new List<Message>();
+    
+    [InverseProperty(nameof(Notification.ReceivingUser))]
+    public virtual ICollection<Notification> NotificationsReceived { get; set; } = new List<Notification>();
+    
+    [InverseProperty(nameof(Notification.Initaiator))]
+    public virtual ICollection<Notification> NotificationsSent { get; set; } = new List<Notification>();
+    
+    public virtual ICollection<FeedContent> FeedContents { get; set; } = new List<FeedContent>();
+    public virtual ICollection<FeedContent> FeedContentsIn { get; set; } = new List<FeedContent>();
+}
+```
+
+### User-to-User Relationships
+
+- **Follow**: Bidirectional follower/following graph
+- **Block**: Users can block accounts that block them
+- **Close Friends**: Subset of followed users with special access
+
+Each uses a join table with composite key to model the many-to-many relationship.
+
+## Indexing Strategy
+
+Strategic indexes optimize the most frequent query patterns.
+
+### User Table Indexes
+
+#### Unique Index on UserName (User.cs:6)
+
+```csharp
+[Index(nameof(UserName), IsUnique = true)]
+public class User
+{
+    // ...
+}
+```
+
+**Purpose:**
+- Enforces username uniqueness
+- Speeds up login queries: `WHERE UserName = @username`
+- Supports profile lookups by username
+
+### Post Table Indexes
+
+#### Index on InitiatorID (Post.cs:5)
+
+```csharp
+[Index(nameof(InitiatorID))]
+public class Post
+{
+    [Key]
+    public long PostID { get; set; }
+    
+    [Required]
+    public long InitiatorID { get; set; }
+    
+    [ForeignKey(nameof(InitiatorID))]
+    public User Initiator { get; set; } = null!;
+    
+    [Required]
+    [MaxLength(800)]
+    public string Caption { get; set; } = null!;
+    
+    public DateTime CreatedAt { get; set; }
+    
+    [Required]
+    public int LikeCount { get; set; }
+    
+    [Required]
+    public bool isDeleted { get; set; }
+    
+    public DateTime? DeletedAt { get; set; }
+    
+    // Collections
+    public virtual ICollection<SavedPost> Saves { get; set; } = new List<SavedPost>();
+    public virtual ICollection<PostMedia> PostMediasLinks { get; set; } = new List<PostMedia>();
+    public virtual ICollection<PostLike> PostLikes { get; set; } = new List<PostLike>();
+    public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
+    public virtual ICollection<FeedContent> Feed { get; set; } = new List<FeedContent>();
+}
+```
+
+**Purpose:**
+- Speeds up queries filtering posts by user(s)
+- Critical for feed assembly: `WHERE InitiatorID IN (followed user IDs)`
+- Supports user profile post lists
+
+### Reverse Indexes on Relationship Tables
+
+From the README:
+
+> For `Follow`, `BlockedAccount`, and `CloseFriend`, an additional index exists in the **reverse direction** of the composite PK.
+
+#### Why Reverse Indexes?
+
+Composite primary keys optimize lookups by the PK's leading column order. For example, a PK on `(FollowerID, FollowedUserID)` efficiently answers:
+- "Who does User A follow?" → `WHERE FollowerID = A`
+
+But this query is inefficient:
+- "Who follows User B?" → `WHERE FollowedUserID = B`
+
+The reverse index on `(FollowedUserID, FollowerID)` optimizes the second pattern.
+
+**Configuration in DbContext:**
+
+```csharp
+modelBuilder.Entity<Follow>()
+    .HasKey(f => new { f.FollowerID, f.FollowedUserID });
+
+modelBuilder.Entity<Follow>()
+    .HasIndex(f => new { f.FollowedUserID, f.FollowerID });  // Reverse index
+```
+
+Without this index, SQLite would do inefficient scans when querying by the reversed key order.
+
+### Additional Indexes
+
+#### SavedPost (Post.cs:30)
+
+```csharp
+[Index(nameof(PostID), nameof(SaverID))]  // Reverse of PK order
+[PrimaryKey(nameof(SaverID), nameof(PostID))]
+```
+
+- PK `(SaverID, PostID)`: "What posts did User A save?"
+- Index `(PostID, SaverID)`: "Who saved Post B?"
+
+#### Notification (Interactions.cs:53)
+
+```csharp
+[Index(nameof(ReceivingUserID), nameof(InitaiatorID))]
+[Index(nameof(NotificationType))]
+public class Notification
+{
+    // ...
+}
+```
+
+- Index on `(ReceivingUserID, InitaiatorID)`: User's notification feed
+- Index on `NotificationType`: Filter by notification type
+
+## Tables Overview
+
+### Core Tables
+
+#### Users
+Stores user account information, authentication credentials, and profile metadata.
+
+**Key Fields:**
+- `UserID` (PK): Primary identifier
+- `UserName` (Unique): Login username
+- `PasswordHash`: Hashed password (PBKDF2)
+- `FollowersCount`, `FollowingCount`: Denormalized counters
+- `AccountDeleted`, `DeletedAt`: Soft delete support
+
+#### UserProfile
+One-to-one extension of User for settings and preferences.
+
+**Key Fields:**
+- `UserID` (PK, FK): References User
+- `PushNotifications`, `AccountPrivacy`, `Verified`: Boolean settings
+- `Website`, `Gender`: Optional profile fields
+
+#### Posts
+User-generated content items.
+
+**Key Fields:**
+- `PostID` (PK): Primary identifier
+- `InitiatorID` (FK, Indexed): Creator user ID
+- `Caption`: Post text content (max 800 chars)
+- `CreatedAt`: Timestamp for sorting/pagination
+- `LikeCount`: Denormalized counter
+- `isDeleted`, `DeletedAt`: Soft delete support
+
+### Relationship Tables (Composite PKs)
+
+#### Follow
+`(FollowerID, FollowedUserID)` - User follows another user
+
+#### BlockedAccount
+`(BlockingUserID, BlockedAccountId)` - User blocks another user
+
+#### CloseFriend
+`(AddingUserID, CloseFriendAccountId)` - User adds another as close friend
+
+### Interaction Tables (Composite PKs)
+
+#### PostLike
+`(LikerID, PostID)` - User likes a post
+- Includes `CreatedAt` for activity timeline
+
+#### SavedPost
+`(SaverID, PostID)` - User saves a post for later
+
+#### Comment
+User comments on a post (uses auto-increment PK)
+- `commentID` (PK): Unique identifier
+- `PostID` (FK, Indexed): Post being commented on
+- `CommenterID` (FK): User who commented
+- `CommentText`: Comment content (max 1000 chars)
+- `LikeCount`: Comments can be liked
+- `isDeleted`, `DeletedAt`: Soft delete support
+
+### Supporting Tables
+
+#### PostMedia
+Media attachments for posts (images/videos)
+- `PostMediaID` (PK)
+- `PostID` (FK, Indexed)
+- `MediaType`: Enum (Image, Video)
+- `MediaURL`: Link to media resource
+
+#### Notification
+Activity notifications for users
+- `NotificationID` (PK)
+- `ReceivingUserID` (FK, Indexed)
+- `InitaiatorID` (FK)
+- `NotificationType`: Enum (Follow, Like, Comment)
+- `CreatedAt`: Timestamp
+
+#### FeedContent
+Materialized view of feed items (fan-out on write pattern)
+- `UserID` (PK)
+- `FollowerID`, `FollowedUserID`: Denormalized relationship
+- `PostID` (FK): Post in feed
+
+#### Message
+Direct messages between users
+- `MessageID` (PK)
+- `SenderID`, `ReceiptientID` (FKs)
+- `MessageContent`: Message text
+- `CreatedAt`: Timestamp
+
+## Design Patterns
+
+### Soft Deletes
+
+User and Post entities support soft deletion:
+
+```csharp
+public bool AccountDeleted { get; set; }
+public DateTime? DeletedAt { get; set; }
+```
+
+Benefits:
+- Preserve data for audit/analytics
+- Support "restore" functionality
+- Maintain referential integrity
+
+### Denormalized Counters
+
+Frequently accessed counts are stored directly:
+
+```csharp
+public int FollowersCount { get; set; }
+public int FollowingCount { get; set; }
+public int LikeCount { get; set; }
+```
+
+Trade-off:
+- **Pro**: Fast reads (no `COUNT(*)` queries)
+- **Con**: Must maintain consistency during updates
+- **Solution**: Use transactions for atomic counter updates (see post.action.cs:186)
+
+### Inverse Properties
+
+EF Core navigation properties clarify bidirectional relationships:
+
+```csharp
+[InverseProperty(nameof(Notification.ReceivingUser))]
+public virtual ICollection<Notification> NotificationsReceived { get; set; }
+
+[InverseProperty(nameof(Notification.Initaiator))]
+public virtual ICollection<Notification> NotificationsSent { get; set; }
+```
+
+This prevents ambiguity when the same entity type appears twice in a relationship.
+
+## Future Considerations
+
+From the README:
+
+### SQLite to PostgreSQL Migration
+
+**Current**: SQLite for local development simplicity
+
+**Future**: PostgreSQL for production
+- Better indexing strategies (partial indexes, expression indexes)
+- Advanced concurrency control (MVCC)
+- Superior query planner
+- Native JSON support for polymorphic data
+
+### Feed Scaling
+
+**Current**: Fan-in on read (query followed users' posts at request time)
+
+**Future**: Hybrid approach
+- Fan-out on write for active users (materialize to FeedContent table)
+- Fan-in on read for less active users
+- Ranking algorithms for feed relevance
+- Filtering by close-friends-only posts

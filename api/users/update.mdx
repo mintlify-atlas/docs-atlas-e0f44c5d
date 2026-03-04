@@ -1,0 +1,166 @@
+---
+title: 'Update user'
+description: 'Update user profile and account details'
+---
+
+## Endpoint
+
+```
+PUT /api/users/{username}
+```
+
+## Authentication
+
+This endpoint requires authentication using a JWT Bearer token.
+
+```bash
+Authorization: Bearer <token>
+```
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user to update
+</ParamField>
+
+## Request Body
+
+All fields in the request body are optional unless otherwise specified.
+
+<ParamField body="userName" type="string">
+  New username for the user. Must be unique across all users.
+</ParamField>
+
+<ParamField body="firstName" type="string">
+  User's first name
+</ParamField>
+
+<ParamField body="lastName" type="string">
+  User's last name
+</ParamField>
+
+<ParamField body="email" type="string">
+  User's email address. Must be unique across all users.
+</ParamField>
+
+<ParamField body="phoneNumber" type="string">
+  User's phone number. Must be unique across all users.
+</ParamField>
+
+<ParamField body="profileImage_MediaUrl" type="string">
+  URL to the user's profile image. Must be a valid URL.
+</ParamField>
+
+<ParamField body="bio" type="string">
+  User biography. Maximum 200 characters.
+</ParamField>
+
+<ParamField body="providedOldPassword" type="string">
+  Current password. **Required** when changing password (providedNewPassword is set).
+</ParamField>
+
+<ParamField body="providedNewPassword" type="string">
+  New password for the user account. Requires providedOldPassword for verification.
+</ParamField>
+
+<ParamField body="Website" type="string">
+  User's website URL. Must be a valid URL.
+</ParamField>
+
+<ParamField body="Gender" type="string">
+  User's gender. Maximum 20 characters.
+</ParamField>
+
+<ParamField body="PushNotifications" type="boolean">
+  Enable or disable push notifications
+</ParamField>
+
+<ParamField body="AccountPrivacy" type="boolean">
+  Set account privacy status (true for private, false for public)
+</ParamField>
+
+<ParamField body="Verified" type="boolean">
+  Verification status of the account
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X PUT https://api.example.com/api/users/johndoe \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john.doe@example.com",
+    "bio": "Software developer and tech enthusiast",
+    "Website": "https://johndoe.com",
+    "PushNotifications": true,
+    "AccountPrivacy": false
+  }'
+```
+
+## Response
+
+### Success Response
+
+**Status Code:** `204 No Content`
+
+The user profile was successfully updated. No response body is returned.
+
+### Error Responses
+
+**Status Code:** `401 Unauthorized`
+
+Returned when:
+- No valid JWT Bearer token is provided
+- Old password verification fails when changing password
+
+**Status Code:** `404 Not Found`
+
+```json
+"The user was not found"
+```
+
+The specified username does not exist in the system.
+
+**Status Code:** `409 Conflict`
+
+Returned when trying to update to a value that's already taken:
+
+```json
+"Username is already taken"
+```
+
+```json
+"Email is already taken"
+```
+
+```json
+"Phone Number is already taken"
+```
+
+## Validation Logic
+
+The endpoint performs the following validations:
+
+1. **Username uniqueness**: If updating username, checks that the new username is not already in use by another user
+2. **Email uniqueness**: If updating email, verifies the new email is not already registered
+3. **Phone number uniqueness**: If updating phone number, ensures it's not already associated with another account
+4. **Password verification**: When changing password, the old password must be provided and verified before the new password is set
+
+<Warning>
+  **Password Change Requires Verification**
+  
+  When updating the password, you **must** provide the `providedOldPassword` field. The system will verify the old password before accepting the new password. If the old password is incorrect, the request will fail with a `401 Unauthorized` response.
+</Warning>
+
+## Implementation Details
+
+From `auth.endpoints.cs:54-97`, the update handler:
+- Loads the user with their profile using `Include(u => u.UserProfile)`
+- Only updates fields that are provided (null fields are ignored)
+- Validates uniqueness constraints before updating username, email, or phone number
+- Uses `IPasswordHasher` to verify old password and hash new password
+- Updates both User and UserProfile entities in a single transaction
+- Returns `204 No Content` on successful update

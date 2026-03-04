@@ -1,0 +1,219 @@
+---
+title: "Get activity feed"
+api: "GET /api/feed/{username}"
+authMethod: "bearer"
+---
+
+Retrieve paginated activity feed with cursor-based pagination. Returns posts from accounts that the specified user follows, ordered by creation time.
+
+## Authentication
+
+This endpoint requires authentication via Bearer token in the Authorization header.
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user whose feed to retrieve
+</ParamField>
+
+## Query Parameters
+
+<ParamField query="cursor" type="string" optional>
+  Base64 URL-encoded cursor from previous response for pagination. If not provided, returns the first page of results.
+  
+  The cursor is a Base64 URL-encoded JSON object containing:
+  - `dateTime`: ISO 8601 timestamp of the last post
+  - `lastId`: PostID of the last post
+</ParamField>
+
+<ParamField query="limit" type="integer" optional default="20">
+  Number of posts to return per page. The API fetches `limit + 1` posts internally to determine if more pages exist.
+</ParamField>
+
+## Cursor Structure
+
+The cursor is implemented as a record in the source code:
+
+```csharp
+public sealed record Cursor(DateTime dateTime, long lastId)
+{
+    public static string Encode(DateTime dateTime, long lastId)
+    {
+        var cursor = new Cursor(dateTime, lastId);
+        string json = JsonSerializer.Serialize(cursor);
+        return Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(json));
+    }
+    
+    public static Cursor? Decode(string? cursor)
+    {
+        if (string.IsNullOrWhiteSpace(cursor))
+        {
+            return null;
+        }
+        try
+        {
+            string json = Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(cursor));
+            return JsonSerializer.Deserialize<Cursor>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
+```
+
+The cursor encodes two fields:
+- **dateTime**: The `CreatedAt` timestamp of the last post on the current page
+- **lastId**: The `PostID` of the last post on the current page
+
+<Note>
+  The cursor is Base64 URL-encoded (not standard Base64) to ensure safe usage in URLs. Invalid cursors return a 400 Bad Request response.
+</Note>
+
+## Response
+
+<ResponseField name="Posts" type="array">
+  Array of post objects from followed accounts
+  
+  <Expandable title="Post Object">
+    <ResponseField name="PostID" type="long">
+      Unique identifier for the post
+    </ResponseField>
+    
+    <ResponseField name="InitiatorID" type="long">
+      User ID of the post creator
+    </ResponseField>
+    
+    <ResponseField name="Caption" type="string">
+      Text caption of the post
+    </ResponseField>
+    
+    <ResponseField name="CreatedAt" type="DateTime">
+      ISO 8601 timestamp when the post was created
+    </ResponseField>
+    
+    <ResponseField name="LikeCount" type="integer">
+      Total number of likes on the post
+    </ResponseField>
+    
+    <ResponseField name="PostMediasLinks" type="array">
+      Array of media URLs attached to the post
+    </ResponseField>
+    
+    <ResponseField name="Comments" type="array">
+      Array of comment objects on the post
+    </ResponseField>
+    
+    <ResponseField name="PostLikes" type="array">
+      Array of like objects for the post
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Cursor" type="string" nullable>
+  Base64 URL-encoded cursor for fetching the next page. Returns `null` if there are no more pages.
+</ResponseField>
+
+<ResponseField name="HasMore" type="boolean">
+  Indicates whether more results exist beyond the current page
+</ResponseField>
+
+## Ordering
+
+Posts are ordered by:
+1. **CreatedAt** (descending) - Most recent posts first
+2. **PostID** (descending) - Tie-breaker for posts with identical timestamps
+
+The cursor-based pagination uses these fields to maintain consistent ordering:
+
+```csharp
+query.Where(x => x.CreatedAt < cursorTime || x.CreatedAt == cursorTime && x.PostID <= cursorId)
+  .OrderByDescending(p => p.CreatedAt)
+  .ThenByDescending(p => p.PostID)
+```
+
+## Request Examples
+
+<RequestExample>
+
+```bash First page (no cursor)
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+```bash Next page (with cursor)
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=20&cursor=eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTU6MzA6MDBaIiwibGFzdElkIjoxMjM0NX0" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+{
+  "Posts": [
+    {
+      "PostID": 12345,
+      "InitiatorID": 67890,
+      "Caption": "Beautiful sunset today!",
+      "CreatedAt": "2026-03-04T15:30:00Z",
+      "LikeCount": 42,
+      "PostMediasLinks": [
+        "https://media.example.com/image1.jpg"
+      ],
+      "Comments": [],
+      "PostLikes": []
+    },
+    {
+      "PostID": 12344,
+      "InitiatorID": 11111,
+      "Caption": "Great day at the beach",
+      "CreatedAt": "2026-03-04T14:20:00Z",
+      "LikeCount": 38,
+      "PostMediasLinks": [
+        "https://media.example.com/image2.jpg",
+        "https://media.example.com/image3.jpg"
+      ],
+      "Comments": [],
+      "PostLikes": []
+    }
+  ],
+  "Cursor": "eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTQ6MjA6MDBaIiwibGFzdElkIjoxMjM0NH0",
+  "HasMore": true
+}
+```
+
+```json 200 Last page
+{
+  "Posts": [
+    {
+      "PostID": 10001,
+      "InitiatorID": 22222,
+      "Caption": "First post!",
+      "CreatedAt": "2026-03-01T10:00:00Z",
+      "LikeCount": 5,
+      "PostMediasLinks": [],
+      "Comments": [],
+      "PostLikes": []
+    }
+  ],
+  "Cursor": null,
+  "HasMore": false
+}
+```
+
+```json 400 Bad Request
+{
+  "error": "Invalid cursor format"
+}
+```
+
+```json 409 Conflict
+{
+  "error": "Unable to retrieve posts"
+}
+```
+
+</ResponseExample>

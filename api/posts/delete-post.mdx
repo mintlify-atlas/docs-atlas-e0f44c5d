@@ -1,0 +1,88 @@
+---
+title: "Delete post"
+description: "Soft delete a post (marks as deleted)"
+---
+
+Performs a soft delete on a post, marking it as deleted without permanently removing it from the database. Only the post owner can delete their own posts.
+
+<Note>
+  This is a soft delete operation. The post is not permanently removed from the database. Instead, the `isDeleted` flag is set to `true` and the `DeletedAt` timestamp is recorded. The post can be restored using the [restore endpoint](/api/posts/restore-post).
+</Note>
+
+## Endpoint
+
+```
+DELETE /api/posts/{id}
+```
+
+## Authentication
+
+This endpoint requires authentication. Only the post owner can delete their post.
+
+## Path Parameters
+
+<ParamField path="id" type="long" required>
+  The unique identifier (PostID) of the post to delete
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the account requesting deletion. Must be the post owner.
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "john_doe"
+  }'
+```
+
+## Response
+
+<ResponseExample>
+```json 204 No Content
+```
+</ResponseExample>
+
+Returns `204 No Content` when the post is successfully marked as deleted. The following changes are made to the post:
+
+- `isDeleted` is set to `true`
+- `DeletedAt` is set to the current timestamp
+
+## Error Responses
+
+<ResponseExample>
+```json 404 Not Found
+"This account does not exist"
+```
+</ResponseExample>
+
+Returned when the username in the request body is not found.
+
+<ResponseExample>
+```json 404 Not Found
+"This post does not exist"
+```
+</ResponseExample>
+
+Returned when no post exists with the specified ID.
+
+<ResponseExample>
+```json 409 Conflict
+"This user does not own the post"
+```
+</ResponseExample>
+
+Returned when the requesting user is not the owner of the post.
+
+<ResponseExample>
+```json 403 Forbidden
+```
+</ResponseExample>
+
+Returned when the post is already marked as deleted.

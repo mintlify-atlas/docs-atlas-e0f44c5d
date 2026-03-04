@@ -1,0 +1,216 @@
+---
+title: "Installation"
+description: "Set up the Social Media Activity Feed API in your environment"
+---
+
+## Prerequisites
+
+Ensure you have the following installed on your system:
+
+- **.NET 10.0 SDK** - Required for building and running the application
+- **SQLite** - Lightweight database for local development
+- **Git** - For cloning the repository
+
+### Verify .NET Installation
+
+Check your .NET SDK version:
+
+```bash
+dotnet --version
+```
+
+You should see version `10.0.x` or higher.
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Social Media Activity Feed API repository:
+    
+    ```bash
+    git clone <repository-url>
+    cd Social-Media-Activity-Feed
+    ```
+  </Step>
+
+  <Step title="Restore dependencies">
+    Install all required NuGet packages:
+    
+    ```bash
+    dotnet restore
+    ```
+  </Step>
+</Steps>
+
+## Dependencies
+
+The project includes the following key packages (from `Social-Media-Activity-Feed.csproj`):
+
+```xml
+<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.1" />
+<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.1" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.1" />
+```
+
+**Key dependencies:**
+- **Microsoft.EntityFrameworkCore.Sqlite** - Database provider for SQLite
+- **Microsoft.AspNetCore.Authentication.JwtBearer** - JWT authentication middleware
+- **Microsoft.EntityFrameworkCore.Tools** - EF Core command-line tools for migrations
+
+## Configuration
+
+### JWT Settings
+
+Configure JWT authentication using .NET user secrets for secure credential storage:
+
+```bash
+dotnet user-secrets init
+dotnet user-secrets set "Jwt:Issuer" "YourIssuerName"
+dotnet user-secrets set "Jwt:Key" "YourSecureSecretKeyHere"
+```
+
+<Tip>
+  User secrets are stored outside your project directory and are never committed to source control. This is the recommended approach for local development.
+</Tip>
+
+**JWT Configuration Requirements:**
+- **Jwt:Issuer** - The issuer name for token validation (e.g., "SocialMediaAPI")
+- **Jwt:Key** - A secure secret key for signing tokens (minimum 32 characters recommended)
+
+### Database Connection String
+
+The application is configured to use SQLite with the following connection string (from `Program.cs`):
+
+```csharp
+options.UseSqlite("Data Source = social.db")
+```
+
+This creates a SQLite database file named `social.db` in your project root directory.
+
+### Application Settings
+
+The `appsettings.json` file contains logging and host configuration:
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+```
+
+<Note>
+  JWT settings are intentionally not stored in `appsettings.json` for security. Always use user secrets for local development and environment variables or secure vaults for production.
+</Note>
+
+## Database Setup
+
+### Install EF Core Tools
+
+If you haven't installed Entity Framework Core tools globally:
+
+```bash
+dotnet tool install --global dotnet-ef
+```
+
+### Run Migrations
+
+Create and initialize the database:
+
+```bash
+dotnet ef database update
+```
+
+This command:
+1. Creates the `social.db` SQLite database file
+2. Applies all migrations to create the schema
+3. Sets up tables for Users, Follows, Posts, Notifications, and more
+
+### View Available Migrations
+
+To see all available migrations:
+
+```bash
+dotnet ef migrations list
+```
+
+## Verification
+
+Verify your installation by running the application:
+
+```bash
+dotnet run
+```
+
+**Expected output:**
+```
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5000
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: https://localhost:5001
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+```
+
+### Test the API
+
+Check if the API is running:
+
+```bash
+curl http://localhost:5000/
+```
+
+**Response:**
+```
+Hello World!
+```
+
+<Tip>
+  Use a SQLite browser tool like [DB Browser for SQLite](https://sqlitebrowser.org/) to inspect and debug your database during development.
+</Tip>
+
+## Troubleshooting
+
+### Missing JWT Configuration
+
+If you see authentication errors, ensure JWT settings are configured:
+
+```bash
+dotnet user-secrets list
+```
+
+You should see:
+```
+Jwt:Issuer = YourIssuerName
+Jwt:Key = YourSecureSecretKeyHere
+```
+
+### Database Connection Issues
+
+If the database fails to connect:
+1. Ensure the `social.db` file has write permissions
+2. Run `dotnet ef database update` to recreate the database
+3. Check for migration errors in the console output
+
+### Port Already in Use
+
+If port 5000 or 5001 is already in use, specify a different port:
+
+```bash
+dotnet run --urls "http://localhost:5050;https://localhost:5051"
+```
+
+## Next Steps
+
+Now that you have the API installed:
+
+- Follow the [Quickstart Guide](/quickstart) to create your first user and make API calls
+- Review the [API Reference](/api/auth/register) for all available endpoints
+- Learn about [Authentication](/concepts/authentication) flows
+- Explore [Database Design](/concepts/database-design) and relationships

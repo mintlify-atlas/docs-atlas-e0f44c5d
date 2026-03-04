@@ -1,0 +1,114 @@
+---
+title: "Create post"
+description: "Create a new post with caption and optional media"
+---
+
+Creates a new post in the social media feed. Posts can include a text caption (up to 800 characters) and optional media attachments (images or videos).
+
+## Endpoint
+
+```
+POST /api/posts
+```
+
+## Authentication
+
+This endpoint requires authentication. The authenticated user must match the `userName` in the request body.
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the account creating the post. Must match the authenticated user.
+</ParamField>
+
+<ParamField body="caption" type="string" required>
+  The text content of the post. Maximum length: 800 characters.
+</ParamField>
+
+<ParamField body="PostMediasLinkInputs" type="array" required>
+  Array of media attachments for the post. Can be empty.
+  
+  <Expandable title="Media object properties">
+    <ParamField body="mediaType" type="enum" required>
+      Type of media. Possible values: `Image`, `Video`
+    </ParamField>
+    
+    <ParamField body="mediaURL" type="string" required>
+      Valid URL pointing to the media file.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X POST https://api.example.com/api/posts \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "john_doe",
+    "caption": "Beautiful sunset at the beach today!",
+    "PostMediasLinkInputs": [
+      {
+        "mediaType": "Image",
+        "mediaURL": "https://example.com/images/sunset.jpg"
+      }
+    ]
+  }'
+```
+
+## Response
+
+<ResponseExample>
+```json 201 Created
+{}
+```
+</ResponseExample>
+
+Returns `201 Created` when the post is successfully created. The post is stored with the following properties:
+
+<ResponseField name="PostID" type="long">
+  Unique identifier for the post (auto-generated)
+</ResponseField>
+
+<ResponseField name="InitiatorID" type="long">
+  User ID of the post creator
+</ResponseField>
+
+<ResponseField name="Caption" type="string">
+  The post caption text
+</ResponseField>
+
+<ResponseField name="CreatedAt" type="datetime">
+  Timestamp when the post was created
+</ResponseField>
+
+<ResponseField name="LikeCount" type="integer">
+  Initial like count (starts at 0)
+</ResponseField>
+
+<ResponseField name="PostMediasLinks" type="array">
+  Array of media attachments with their IDs, types, and URLs
+</ResponseField>
+
+<ResponseField name="isDeleted" type="boolean">
+  Soft delete flag (initially false)
+</ResponseField>
+
+## Error Responses
+
+<ResponseExample>
+```json 404 Not Found
+"This account does not exist"
+```
+</ResponseExample>
+
+Returned when the specified username is not found in the system.
+
+<ResponseExample>
+```json 409 Conflict
+"Post cannot be made on an account by another"
+```
+</ResponseExample>
+
+Returned when the authenticated user does not match the userName in the request body.

@@ -1,0 +1,94 @@
+---
+title: "Comment on post"
+description: "Add a comment to a post"
+---
+
+Adds a comment to a post and creates a notification for the post owner.
+
+## Endpoint
+
+```
+POST /api/posts/{id}/comment
+```
+
+## Authentication
+
+Required. User must be authenticated to comment on a post.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the post to comment on (PostID)
+</ParamField>
+
+## Request Body
+
+<ParamField body="CommentText" type="string" required>
+  The text content of the comment. Maximum length: 1000 characters
+</ParamField>
+
+## Behavior
+
+- Creates a new Comment record
+- Sets initial LikeCount to 0
+- Creates a notification for the post owner
+- Prevents commenting on posts from blocked accounts
+
+## Request
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/comment \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "commentText": "Great post!"
+  }'
+```
+
+## Response
+
+<ResponseField name="status" type="integer">
+  201 Created - Comment added successfully
+</ResponseField>
+
+Returns a Comment object:
+
+<ResponseField name="commentID" type="integer">
+  Unique identifier for the comment
+</ResponseField>
+
+<ResponseField name="PostID" type="integer">
+  ID of the post being commented on
+</ResponseField>
+
+<ResponseField name="CommenterID" type="integer">
+  ID of the user who made the comment
+</ResponseField>
+
+<ResponseField name="CommentText" type="string">
+  The text content of the comment
+</ResponseField>
+
+<ResponseField name="CreatedAt" type="datetime">
+  Timestamp when the comment was created
+</ResponseField>
+
+<ResponseField name="LikeCount" type="integer">
+  Number of likes on the comment (initially 0)
+</ResponseField>
+
+```json
+201 Created
+```
+
+## Errors
+
+<ResponseField name="404" type="error">
+  Post or account does not exist, or action cannot be completed due to a block
+</ResponseField>
+
+```json
+{
+  "error": "This post does not exist"
+}
+```

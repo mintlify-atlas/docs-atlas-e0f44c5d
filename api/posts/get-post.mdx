@@ -1,0 +1,178 @@
+---
+title: "Get post"
+description: "Retrieve a specific post by ID"
+---
+
+Retrieves detailed information about a specific post, including the post content, media, comments, and engagement metrics. The response includes information about whether the viewing user has saved the post and handles blocking relationships.
+
+## Endpoint
+
+```
+GET /api/posts/{id}
+```
+
+## Authentication
+
+This endpoint does not require authentication, but may return different results for authenticated users.
+
+## Path Parameters
+
+<ParamField path="id" type="long" required>
+  The unique identifier (PostID) of the post to retrieve
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string">
+  Optional username of the viewing user. Used to determine if the post is saved by this user and to check blocking relationships.
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X GET https://api.example.com/api/posts/12345 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "john_doe"
+  }'
+```
+
+## Response
+
+<ResponseExample>
+```json 200 OK
+{
+  "postOwnerPfpUrl": "https://example.com/pfp/user123.jpg",
+  "postOwnerUserName": "jane_smith",
+  "dateCreated": "2026-03-04T10:30:00Z",
+  "likesCount": 42,
+  "postCaption": "Beautiful sunset at the beach today!",
+  "postMedias": [
+    {
+      "postMediaID": 1,
+      "postID": 12345,
+      "mediaType": "Image",
+      "mediaURL": "https://example.com/images/sunset.jpg"
+    }
+  ],
+  "postComments": [
+    {
+      "commentID": 101,
+      "postID": 12345,
+      "commenterID": 456,
+      "commentText": "Amazing photo!",
+      "likeCount": 5,
+      "createdAt": "2026-03-04T11:00:00Z",
+      "isDeleted": false
+    }
+  ],
+  "isSaved": true
+}
+```
+</ResponseExample>
+
+<ResponseField name="postOwnerPfpUrl" type="string">
+  URL of the post owner's profile picture. Defaults to "http://default/defaultPfp.png" if not set.
+</ResponseField>
+
+<ResponseField name="postOwnerUserName" type="string">
+  Username of the post creator
+</ResponseField>
+
+<ResponseField name="dateCreated" type="datetime">
+  Timestamp when the post was created
+</ResponseField>
+
+<ResponseField name="likesCount" type="integer">
+  Total number of likes on the post
+</ResponseField>
+
+<ResponseField name="postCaption" type="string">
+  The text content of the post (max 800 characters)
+</ResponseField>
+
+<ResponseField name="postMedias" type="array">
+  Array of media attachments
+  
+  <Expandable title="PostMedia object">
+    <ResponseField name="postMediaID" type="long">
+      Unique identifier for the media item
+    </ResponseField>
+    
+    <ResponseField name="postID" type="long">
+      ID of the parent post
+    </ResponseField>
+    
+    <ResponseField name="mediaType" type="enum">
+      Type of media: `Image` or `Video`
+    </ResponseField>
+    
+    <ResponseField name="mediaURL" type="string">
+      URL of the media file
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="postComments" type="array">
+  Array of comments on the post
+  
+  <Expandable title="Comment object">
+    <ResponseField name="commentID" type="long">
+      Unique identifier for the comment
+    </ResponseField>
+    
+    <ResponseField name="postID" type="long">
+      ID of the parent post
+    </ResponseField>
+    
+    <ResponseField name="commenterID" type="long">
+      User ID of the commenter
+    </ResponseField>
+    
+    <ResponseField name="commentText" type="string">
+      The comment text content (max 1000 characters)
+    </ResponseField>
+    
+    <ResponseField name="likeCount" type="integer">
+      Number of likes on the comment
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="datetime">
+      When the comment was created
+    </ResponseField>
+    
+    <ResponseField name="isDeleted" type="boolean">
+      Whether the comment has been deleted
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="isSaved" type="boolean">
+  Whether the viewing user has saved this post (requires userName in request)
+</ResponseField>
+
+## Error Responses
+
+<ResponseExample>
+```json 404 Not Found
+"This post does not exist"
+```
+</ResponseExample>
+
+Returned when no post exists with the specified ID.
+
+<ResponseExample>
+```json 404 Not Found
+"This post has been deleted"
+```
+</ResponseExample>
+
+Returned when the post exists but has been soft deleted.
+
+<ResponseExample>
+```json 404 Not Found
+"Action cannot be completed due to a block."
+```
+</ResponseExample>
+
+Returned when there is a blocking relationship between the viewing user and the post owner.

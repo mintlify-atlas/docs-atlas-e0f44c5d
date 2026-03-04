@@ -1,0 +1,86 @@
+---
+title: "Restore post"
+description: "Restore a previously deleted post"
+---
+
+Restores a previously soft-deleted post, making it visible again in the feed. Only the post owner can restore their own posts.
+
+## Endpoint
+
+```
+POST /api/posts/{id}/restore
+```
+
+## Authentication
+
+This endpoint requires authentication. Only the post owner can restore their post.
+
+## Path Parameters
+
+<ParamField path="id" type="long" required>
+  The unique identifier (PostID) of the post to restore
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the account requesting restoration. Must be the post owner.
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/restore \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "john_doe"
+  }'
+```
+
+## Response
+
+<ResponseExample>
+```json 204 No Content
+```
+</ResponseExample>
+
+Returns `204 No Content` when the post is successfully restored. The following changes are made to the post:
+
+- `isDeleted` is set to `false`
+- `DeletedAt` is cleared (set to `null`)
+
+The post becomes visible again in feeds and can be accessed through normal retrieval endpoints.
+
+## Error Responses
+
+<ResponseExample>
+```json 404 Not Found
+"This account does not exist"
+```
+</ResponseExample>
+
+Returned when the username in the request body is not found.
+
+<ResponseExample>
+```json 404 Not Found
+"This post does not exist"
+```
+</ResponseExample>
+
+Returned when no post exists with the specified ID.
+
+<ResponseExample>
+```json 409 Conflict
+"This user does not own the post"
+```
+</ResponseExample>
+
+Returned when the requesting user is not the owner of the post.
+
+<ResponseExample>
+```json 403 Forbidden
+```
+</ResponseExample>
+
+Returned when the post is not currently marked as deleted (i.e., attempting to restore a post that isn't deleted).

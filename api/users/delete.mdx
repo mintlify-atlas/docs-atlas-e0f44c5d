@@ -1,0 +1,88 @@
+---
+title: 'Delete user'
+description: 'Permanently delete a user account'
+---
+
+## Endpoint
+
+```
+DELETE /api/users/{username}
+```
+
+## Authentication
+
+This endpoint requires authentication using a JWT Bearer token.
+
+```bash
+Authorization: Bearer <token>
+```
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user account to delete
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X DELETE https://api.example.com/api/users/johndoe \
+  -H "Authorization: Bearer <your_token>"
+```
+
+## Response
+
+### Success Response
+
+**Status Code:** `204 No Content`
+
+The user account was successfully deleted. No response body is returned.
+
+### Error Responses
+
+**Status Code:** `401 Unauthorized`
+
+Returned when no valid JWT Bearer token is provided in the request.
+
+**Status Code:** `404 Not Found`
+
+```json
+"The user was not found"
+```
+
+The specified username does not exist in the system.
+
+<Warning>
+  **This is a Hard Delete Operation**
+  
+  This endpoint performs a **permanent deletion** of the user account. All user data will be removed from the database immediately. This action cannot be undone.
+  
+  Consider implementing a soft delete mechanism or data retention policy if you need to preserve user data or allow account recovery.
+</Warning>
+
+## Implementation Details
+
+From `auth.endpoints.cs:99-107`, the delete handler:
+
+```csharp
+app.MapDelete("/api/users/{username}", async (string username, SocialMediaDataContext context) =>
+{
+    User? User = await context.Users.Where(u => u.UserName == username).FirstOrDefaultAsync();
+    if (User is null) return Results.NotFound("The user was not found");
+
+    context.Users.Remove(User);
+    await context.SaveChangesAsync();
+    return Results.NoContent();
+}).RequireAuthorization();
+```
+
+The deletion process:
+1. Queries the database for the user by username
+2. Returns `404 Not Found` if the user doesn't exist
+3. Removes the user entity from the database context
+4. Saves changes to persist the deletion
+5. Returns `204 No Content` on success
+
+## Related Endpoints
+
+- [Update user](/api/users/update) - Modify user profile and account details

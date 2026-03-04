@@ -1,0 +1,104 @@
+---
+title: "Get following"
+description: "Get the list of users that a specific user is following"
+---
+
+## Endpoint
+
+```
+GET /api/users/{username}/following
+```
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user whose following list you want to retrieve
+</ParamField>
+
+## Response
+
+<ResponseField name="followingCount" type="number">
+  The total number of users being followed
+</ResponseField>
+
+<ResponseField name="Followers" type="array">
+  Array of user objects that are being followed
+  
+  <Expandable title="Following User Object">
+    <ResponseField name="UserId" type="number">
+      The unique identifier of the followed user
+    </ResponseField>
+    
+    <ResponseField name="userName" type="string">
+      The username of the followed user
+    </ResponseField>
+    
+    <ResponseField name="firstName" type="string">
+      The first name of the followed user
+    </ResponseField>
+    
+    <ResponseField name="lastName" type="string">
+      The last name of the followed user
+    </ResponseField>
+    
+    <ResponseField name="profileImage_MediaUrl" type="string">
+      The URL of the followed user's profile image. Returns a default image URL if not set.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Request Example
+
+```bash cURL
+curl -X GET "https://api.example.com/api/users/johndoe/following" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Response Example
+
+```json
+{
+  "followingCount": 3,
+  "Followers": [
+    {
+      "UserId": 789,
+      "userName": "alice_wonder",
+      "firstName": "Alice",
+      "lastName": "Wonder",
+      "profileImage_MediaUrl": "https://example.com/images/alice.png"
+    },
+    {
+      "UserId": 321,
+      "userName": "charlie_brown",
+      "firstName": "Charlie",
+      "lastName": "Brown",
+      "profileImage_MediaUrl": "https://defaults.com/default.png"
+    },
+    {
+      "UserId": 654,
+      "userName": "eve_tech",
+      "firstName": "Eve",
+      "lastName": "Tech",
+      "profileImage_MediaUrl": "https://example.com/images/eve.png"
+    }
+  ]
+}
+```
+
+## Error Responses
+
+<ResponseField name="404" type="error">
+  Not Found - The specified user account does not exist
+</ResponseField>
+
+## Implementation Details
+
+This endpoint uses an optimized projection query similar to the followers endpoint:
+- The query first retrieves the following account IDs (follow.list.cs:43-47)
+- A second query fetches the full user details for those IDs (follow.list.cs:49-50)
+- `AsNoTracking()` is used for read-only queries to improve performance (follow.list.cs:47)
+- Username comparison is case-insensitive (follow.list.cs:43)

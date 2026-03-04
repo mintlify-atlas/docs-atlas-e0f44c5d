@@ -1,0 +1,226 @@
+---
+title: 'Login'
+description: 'Authenticate and receive a JWT access token'
+---
+
+## Endpoint
+
+```
+POST /api/login
+```
+
+## Authentication
+
+None - This is a public endpoint.
+
+## Request Body
+
+<ParamField path="Username" type="string" required>
+  The username of the account to authenticate.
+</ParamField>
+
+<ParamField path="ProvidedPassword" type="string" required>
+  The plain text password for authentication.
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X POST https://api.example.com/api/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "Username": "johndoe",
+    "ProvidedPassword": "SecurePassword123!"
+  }'
+```
+
+## Response
+
+### Success Response
+
+**Status Code:** `200 OK`
+
+Returns user details and a JWT access token.
+
+<ResponseField name="loginResult" type="object">
+  User information returned upon successful login.
+  
+  <Expandable title="loginResult properties">
+    <ResponseField name="userID" type="long">
+      Unique identifier for the user.
+    </ResponseField>
+    
+    <ResponseField name="userName" type="string">
+      Username of the authenticated user.
+    </ResponseField>
+    
+    <ResponseField name="firstName" type="string">
+      User's first name.
+    </ResponseField>
+    
+    <ResponseField name="lastName" type="string">
+      User's last name.
+    </ResponseField>
+    
+    <ResponseField name="email" type="string">
+      User's email address (empty string if not set).
+    </ResponseField>
+    
+    <ResponseField name="phoneNumber" type="string">
+      User's phone number (empty string if not set).
+    </ResponseField>
+    
+    <ResponseField name="profileImage_MediaUrl" type="string">
+      URL to the user's profile image (empty string if not set).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="accessToken" type="string">
+  JWT access token for authenticating subsequent API requests. This token expires in 60 minutes.
+</ResponseField>
+
+### Response Example
+
+```json
+{
+  "loginResult": {
+    "userID": 12345,
+    "userName": "johndoe",
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john.doe@example.com",
+    "phoneNumber": "+1234567890",
+    "profileImage_MediaUrl": "https://example.com/images/profile.jpg"
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+### Error Responses
+
+**Status Code:** `404 Not Found`
+
+Returned when the username does not exist in the system.
+
+```json
+{
+  "loginResult": null,
+  "accessToken": ""
+}
+```
+
+**Status Code:** `401 Unauthorized`
+
+Returned when the password is incorrect.
+
+## Token Usage
+
+<Note>
+  Include the JWT access token in the `Authorization` header of subsequent API requests:
+  
+  ```
+  Authorization: Bearer {accessToken}
+  ```
+  
+  The token is valid for 60 minutes from the time of issuance.
+</Note>
+
+## JWT Token Structure
+
+The access token contains the following claims:
+
+- **sub**: User ID (primary unique identifier)
+- **unique_name**: Username
+- **email**: Email address (empty string if not set)
+- **phone_number**: Phone number (empty string if not set)
+- **exp**: Token expiration timestamp
+- **iss**: Token issuer
+- **aud**: Token audience
+
+The token is signed using HMAC SHA-256 algorithm.
+
+## Implementation Details
+
+**Source:** `/workspace/source/features/auth/auth.endpoints.cs:39-52`
+
+```csharp
+app.MapPost("/api/login", async (LoginRequest request, 
+    SocialMediaDataContext context, 
+    IPasswordHasher<string> passwordHasher, 
+    ITokenProvider tokenProvider) =>
+{
+    var user = await context.Users
+        .Where(u => u.UserName == request.Username)
+        .Select(s => new { 
+            s.UserID, s.UserName, s.LastName, s.PhoneNumber, 
+            s.PasswordHash, s.Email, s.FirstName, s.ProfileImage_MediaUrl 
+        })
+        .FirstOrDefaultAsync();
+
+    if (user is null) 
+        return Results.NotFound(new AuthResponse { 
+            loginResult = null, 
+            accessToken = string.Empty 
+        });
+        
+    var PasswordResult = passwordHasher.VerifyHashedPassword(
+        string.Empty, 
+        user.PasswordHash, 
+        request.ProvidedPassword ?? string.Empty
+    );
+    bool isValid = PasswordResult != PasswordVerificationResult.Failed;
+    if (!isValid) return Results.Unauthorized();
+
+    string token = tokenProvider.Create(
+        user.UserID, 
+        user.UserName, 
+        user.Email, 
+        user.PhoneNumber
+    );
+    LoginResult resultData = new LoginResult { 
+        userID = user.UserID, 
+        userName = user.UserName, 
+        firstName = user.FirstName, 
+        lastName = user.LastName, 
+        email = user.Email ?? string.Empty, 
+        phoneNumber = user.PhoneNumber ?? string.Empty, 
+        profileImage_MediaUrl = user.ProfileImage_MediaUrl ?? string.Empty 
+    };
+    AuthResponse responseData = new AuthResponse { 
+        loginResult = resultData, 
+        accessToken = token 
+    };
+    return Results.Ok(responseData);
+});
+```
+
+**Token Provider:** `/workspace/source/features/auth/auth.tokenProvider.cs:14-41`
+
+```csharp
+public string Create(long userId, string username, string? email, string? phoneNumber)
+{
+    string secretKey = configuration["Jwt:Key"] ?? string.Empty;
+    var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+    var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+    
+    var tokenDescriptor = new SecurityTokenDescriptor
+    {
+        Subject = new ClaimsIdentity
+        ([
+            new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            new Claim(JwtRegisteredClaimNames.UniqueName, username),
+            new Claim(JwtRegisteredClaimNames.Email, email ?? string.Empty),
+            new Claim(JwtRegisteredClaimNames.PhoneNumber, phoneNumber ?? string.Empty),
+        ]),
+        Expires = DateTime.UtcNow.AddMinutes(60),
+        SigningCredentials = credentials,
+        Issuer = configuration["Jwt:Issuer"],
+        Audience = configuration["Jwt:Issuer"]
+    };
+    
+    var handler = new JsonWebTokenHandler();
+    string token = handler.CreateToken(tokenDescriptor);
+    return token;
+}
+```

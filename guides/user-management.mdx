@@ -1,0 +1,147 @@
+---
+title: User management
+description: Learn how to manage user accounts and profiles
+---
+
+## User registration
+
+Create a new user account by sending user details to the registration endpoint.
+
+```bash
+curl -X POST https://api.example.com/api/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe",
+    "firstName": "John",
+    "lastName": "Doe",
+    "passwordHash": "securePassword123",
+    "email": "john.doe@example.com",
+    "phoneNumber": "+1234567890"
+  }'
+```
+
+The registration endpoint creates both a `User` entity and an associated `UserProfile` with default settings:
+
+- `pushNotifications`: false
+- `accountPrivacy`: false
+- `verified`: false
+
+**Response:**
+
+```
+201 Created
+```
+
+## User profile structure
+
+User accounts consist of two related entities:
+
+### User model
+
+The core `User` entity contains:
+
+- `userID` (long) - Auto-generated unique identifier
+- `userName` (string, max 25 chars) - Unique username
+- `firstName` (string, max 50 chars) - User's first name
+- `lastName` (string, max 50 chars) - User's last name
+- `email` (string, nullable) - Email address
+- `phoneNumber` (string, nullable) - Phone number
+- `bio` (string, max 200 chars, nullable) - User biography
+- `profileImage` (string, nullable) - URL to profile image
+- `followersCount` (int) - Number of followers
+- `followingCount` (int) - Number of accounts being followed
+- `createdAt` (DateTime) - Account creation timestamp
+- `accountDeleted` (bool) - Soft delete flag
+
+### UserProfile model
+
+The `UserProfile` entity extends user information with additional settings:
+
+- `website` (string, nullable) - Personal website URL
+- `gender` (string, max 20 chars, nullable) - Gender identification
+- `pushNotifications` (bool) - Push notification preference
+- `accountPrivacy` (bool) - Account privacy setting
+- `verified` (bool) - Verification status
+
+## Updating user details
+
+Update user information using the PUT endpoint. All fields are optional - only include the fields you want to update.
+
+```bash
+curl -X PUT https://api.example.com/api/users/johndoe \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "firstName": "Jonathan",
+    "bio": "Software developer and coffee enthusiast",
+    "website": "https://johndoe.dev",
+    "accountPrivacy": true
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+### Updating profile fields
+
+You can update any combination of these fields:
+
+**User fields:**
+- `userName` - Username (must be unique)
+- `firstName` - First name
+- `lastName` - Last name
+- `email` - Email address (must be unique)
+- `phoneNumber` - Phone number (must be unique)
+- `profileImage_MediaUrl` - Profile image URL
+
+**UserProfile fields:**
+- `website` - Personal website URL
+- `gender` - Gender (max 20 characters)
+- `pushNotifications` - Enable/disable push notifications
+- `accountPrivacy` - Public or private account
+- `verified` - Verification status
+
+### Updating passwords
+
+<Warning>
+Password updates require providing the old password for verification. Both `providedOldPassword` and `providedNewPassword` must be included.
+</Warning>
+
+```bash
+curl -X PUT https://api.example.com/api/users/johndoe \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "providedOldPassword": "currentPassword123",
+    "providedNewPassword": "newSecurePassword456"
+  }'
+```
+
+If the old password is incorrect, the endpoint returns:
+
+```
+401 Unauthorized
+```
+
+## Deleting accounts
+
+Permanently delete a user account. This is a hard delete operation that removes the user and all associated data.
+
+```bash
+curl -X DELETE https://api.example.com/api/users/johndoe \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist
+- `401 Unauthorized` - Missing or invalid authentication token

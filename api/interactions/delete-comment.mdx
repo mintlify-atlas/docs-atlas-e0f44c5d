@@ -1,0 +1,63 @@
+---
+title: "Delete comment"
+description: "Delete a comment (soft delete)"
+---
+
+Deletes a comment using a soft delete mechanism. Only the comment owner can delete their comment.
+
+## Endpoint
+
+```
+DELETE /api/posts/{id}/comment
+```
+
+## Authentication
+
+Required. User must be the comment owner to delete the comment.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the post containing the comment (PostID)
+</ParamField>
+
+## Behavior
+
+- Sets the isDeleted flag to true
+- Sets the DeletedAt timestamp
+- Only the comment owner can delete their own comment
+- Prevents deleting comments on posts from blocked accounts
+
+## Request
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345/comment \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+## Response
+
+<ResponseField name="status" type="integer">
+  204 No Content - Comment deleted successfully
+</ResponseField>
+
+```json
+204 No Content
+```
+
+## Errors
+
+<ResponseField name="404" type="error">
+  Account does not exist or action cannot be completed due to a block
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  Comment does not exist
+</ResponseField>
+
+```json
+{
+  "error": "This comment does not exist"
+}
+```

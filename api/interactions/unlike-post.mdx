@@ -1,0 +1,63 @@
+---
+title: "Unlike post"
+description: "Remove your like from a post"
+---
+
+Removes a like from a post. Uses a database transaction to ensure atomic operation.
+
+## Endpoint
+
+```
+DELETE /api/posts/{id}/like
+```
+
+## Authentication
+
+Required. User must be authenticated to unlike a post.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the post to unlike (PostID)
+</ParamField>
+
+## Behavior
+
+- Uses a database transaction for atomic operation to ensure data consistency
+- Removes the PostLike record for the user and post
+- Decrements the post's LikeCount
+- Transaction is rolled back if any operation fails
+
+## Request
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345/like \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+## Response
+
+<ResponseField name="status" type="integer">
+  204 No Content - Like removed successfully
+</ResponseField>
+
+```json
+204 No Content
+```
+
+## Errors
+
+<ResponseField name="404" type="error">
+  Post or account does not exist, or action cannot be completed due to a block
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  The user has not liked the post
+</ResponseField>
+
+```json
+{
+  "error": "The user has not liked post"
+}
+```

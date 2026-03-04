@@ -1,97 +1,227 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: Social Media Activity Feed API Documentation
+description: Build scalable social features with our high-performance RESTful API
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden dark:bg-[#0f1117] bg-white py-20">
+  <div className="absolute inset-0 bg-gradient-to-br dark:from-[#1a1d27] dark:via-[#0f1117] dark:to-[#0f1117] from-blue-50 via-white to-white" />
+  <div className="relative max-w-6xl mx-auto px-6 lg:px-8">
+    <div className="grid lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold dark:text-white text-gray-900 mb-6">
+          Social Media Activity Feed API
+        </h1>
+        <p className="text-base sm:text-lg lg:text-xl dark:text-gray-400 text-gray-600 mb-8 max-w-2xl">
+          A high-performance RESTful API built with ASP.NET Core for modeling social graphs, generating scalable follower feeds, and supporting common interaction primitives.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <a
+            href="/quickstart"
+            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium rounded-lg text-white bg-[#3B82F6] hover:bg-[#1E40AF] transition-colors"
+          >
+            Get Started
+          </a>
+          <a
+            href="/api/auth/register"
+            className="inline-flex items-center justify-center px-6 py-3 text-base font-medium rounded-lg dark:text-white text-gray-900 border dark:border-gray-700 border-gray-300 dark:bg-white/5 bg-gray-50 dark:hover:bg-white/10 hover:bg-gray-100 transition-colors"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-6 dark:border dark:border-[#27272a] border border-gray-200">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-[#3B82F6]" />
+              <span className="dark:text-gray-300 text-gray-700 text-sm font-mono">JWT Authentication</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-[#60A5FA]" />
+              <span className="dark:text-gray-300 text-gray-700 text-sm font-mono">Cursor-based Pagination</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-[#3B82F6]" />
+              <span className="dark:text-gray-300 text-gray-700 text-sm font-mono">Social Graph Operations</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-[#60A5FA]" />
+              <span className="dark:text-gray-300 text-gray-700 text-sm font-mono">Post Interactions</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-[#3B82F6]" />
+              <span className="dark:text-gray-300 text-gray-700 text-sm font-mono">Activity Feeds</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-4">Quick start</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Get your API up and running in minutes</p>
+  
+  <Steps>
+    <Step title="Clone and configure">
+      Clone the repository and set up your JWT configuration:
+      
+      ```bash
+      git clone https://github.com/0xfelaback/Social-Media-Activity-Feed.git
+      cd Social-Media-Activity-Feed
+      dotnet user-secrets set "Jwt:Issuer" "your-issuer"
+      dotnet user-secrets set "Jwt:Key" "your-secret-key-here"
+      ```
+    </Step>
+    
+    <Step title="Set up the database">
+      Run EF Core migrations to create your SQLite database:
+      
+      ```bash
+      dotnet ef database update
+      ```
+      
+      <Note>The API uses SQLite for local development. For production, consider migrating to PostgreSQL.</Note>
+    </Step>
+    
+    <Step title="Start the API">
+      Launch the API server:
+      
+      ```bash
+      dotnet run
+      ```
+      
+      Your API will be available at `http://localhost:5000` (or the port specified in your launch settings).
+    </Step>
+    
+    <Step title="Make your first request">
+      Register a new user account:
+      
+      ```bash cURL
+      curl -X POST http://localhost:5000/api/register \
+        -H "Content-Type: application/json" \
+        -d '{
+          "userName": "johndoe",
+          "firstName": "John",
+          "lastName": "Doe",
+          "passwordHash": "SecurePassword123!",
+          "email": "john@example.com",
+          "phoneNumber": "+1234567890"
+        }'
+      ```
+      
+      <Accordion title="Example Response">
+        ```
+        HTTP/1.1 201 Created
+        Location: /api/users/1
+        ```
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-4">Explore by topic</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Jump into the documentation for your use case</p>
+  
+  <CardGroup cols={2}>
+    <Card title="Authentication" icon="lock" href="/concepts/authentication">
+      Learn about JWT-based authentication and securing your API endpoints
+    </Card>
+    <Card title="Social Graph" icon="users" href="/guides/social-graph">
+      Build follow relationships, block users, and manage close friends lists
+    </Card>
+    <Card title="Activity Feeds" icon="rss" href="/guides/activity-feed">
+      Generate scalable follower feeds with cursor-based pagination
+    </Card>
+    <Card title="Post Interactions" icon="heart" href="/guides/posts-interactions">
+      Enable likes, comments, saves, and other engagement features
+    </Card>
+    <Card title="Database Design" icon="database" href="/concepts/database-design">
+      Understand the schema, indexing strategy, and composite keys
+    </Card>
+    <Card title="API Reference" icon="code" href="/api/auth/register">
+      Explore all available endpoints with request/response examples
+    </Card>
+  </CardGroup>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-4">Key features</h2>
+  <p className="text-base dark:text-gray-400 text-gray-600 mb-8">Built for performance and scalability</p>
+  
+  <div className="grid md:grid-cols-2 gap-6">
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-lg p-6 dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#3B82F6]/10 dark:bg-[#3B82F6]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#3B82F6]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">Minimal API Architecture</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">Feature-module organization with endpoints grouped by domain for clean, maintainable code</p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-lg p-6 dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#3B82F6]/10 dark:bg-[#3B82F6]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#3B82F6]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">Composite Primary Keys</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">Database-level data integrity for relationships, preventing duplicates without application logic</p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-lg p-6 dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#3B82F6]/10 dark:bg-[#3B82F6]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#3B82F6]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">Cursor-based Pagination</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">Stable performance at scale with keyset pagination that avoids expensive offset queries</p>
+        </div>
+      </div>
+    </div>
+    
+    <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-lg p-6 dark:border dark:border-[#27272a] border border-gray-200">
+      <div className="flex items-start gap-4">
+        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#3B82F6]/10 dark:bg-[#3B82F6]/20 flex items-center justify-center">
+          <svg className="w-5 h-5 text-[#3B82F6]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold dark:text-white text-gray-900 mb-2">N+1 Query Prevention</h3>
+          <p className="text-sm dark:text-gray-400 text-gray-600">Projection and selective loading patterns keep database round-trips predictable and efficient</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="dark:bg-[#1a1d27] bg-gray-50 rounded-2xl p-8 dark:border dark:border-[#27272a] border border-gray-200 text-center">
+    <h2 className="text-2xl sm:text-3xl font-semibold dark:text-white text-gray-900 mb-4">Ready to build?</h2>
+    <p className="text-base dark:text-gray-400 text-gray-600 mb-6 max-w-2xl mx-auto">
+      Start building social features with our comprehensive API. Follow the quickstart guide to get up and running in minutes.
+    </p>
+    <a
+      href="/quickstart"
+      className="inline-flex items-center justify-center px-6 py-3 text-base font-medium rounded-lg text-white bg-[#3B82F6] hover:bg-[#1E40AF] transition-colors"
+    >
+      Get Started Now
+    </a>
+  </div>
+</div>

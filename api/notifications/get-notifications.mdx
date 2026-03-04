@@ -1,0 +1,150 @@
+---
+title: "Get notifications"
+api: "GET /api/notifications"
+authMethod: "bearer"
+---
+
+Retrieve notifications for the authenticated user. Returns all notifications received by the user, including follows, likes, and comments from other users.
+
+## Authentication
+
+This endpoint requires authentication via Bearer token in the Authorization header.
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  Username of the authenticated user to retrieve notifications for
+</ParamField>
+
+## Response
+
+Returns an array of notification objects ordered by creation time (most recent first).
+
+<ResponseField name="initiatorId" type="long">
+  User ID of the user who triggered the notification (e.g., the user who followed, liked, or commented)
+</ResponseField>
+
+<ResponseField name="initiatorName" type="string">
+  Username of the user who triggered the notification
+</ResponseField>
+
+<ResponseField name="notifType" type="string">
+  Type of notification. One of:
+  - `"Follow"` - User followed you
+  - `"Like"` - User liked your post
+  - `"Comment"` - User commented on your post
+</ResponseField>
+
+<ResponseField name="initiatorProfileImageUrl" type="string">
+  Profile image URL of the user who triggered the notification. Defaults to `"https://defaults.com/default.png"` if not set.
+</ResponseField>
+
+<ResponseField name="CreatedAt" type="DateTime">
+  ISO 8601 timestamp when the notification was created
+</ResponseField>
+
+<ResponseField name="CommentText" type="string" nullable>
+  Text content of the comment (for Comment notifications). Currently not implemented in the response.
+</ResponseField>
+
+<ResponseField name="likedPostID" type="long" nullable>
+  ID of the post that was liked (for Like notifications). Currently not implemented in the response.
+</ResponseField>
+
+## Notification Model
+
+The underlying database model from `Models/Interactions.cs`:
+
+```csharp
+public class Notification
+{
+    [Key]
+    public long NotificationID { get; set; }
+    public long ReceivingUserID { get; set; }
+    public User ReceivingUser { get; set; } = null!;
+    public long InitaiatorID { get; set; }  // Note: typo in source
+    public User Initaiator { get; set; } = null!;
+    
+    public enum NotifType
+    {
+        Follow,
+        Like,
+        Comment
+    }
+    
+    [Required(ErrorMessage = "Please specify a valid Notification Type")]
+    public NotifType NotificationType { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+```
+
+<Note>
+  The source code contains a typo: `InitaiatorID` instead of `InitiatorID`. This is preserved in the database schema but normalized to `initiatorId` in the API response.
+</Note>
+
+## Ordering
+
+Notifications are ordered by `CreatedAt` in descending order (most recent first), as determined by the database query in `notification.action.cs:22`.
+
+## Implementation Notes
+
+- The endpoint currently retrieves all notifications for the user without pagination
+- Additional fields like `CommentText` and `likedPostID` are defined in the response model but not yet populated (see TODO comment at `notification.action.cs:10`)
+- Future enhancements will include TPH/TPT (Table Per Hierarchy/Table Per Type) to provide richer notification details
+
+## Request Example
+
+<RequestExample>
+
+```bash Get notifications
+curl -X GET "https://api.example.com/api/notifications" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 Success
+[
+  {
+    "initiatorId": 67890,
+    "initiatorName": "janedoe",
+    "notifType": "Like",
+    "initiatorProfileImageUrl": "https://media.example.com/profiles/janedoe.jpg",
+    "CreatedAt": "2026-03-04T15:30:00Z",
+    "CommentText": null,
+    "likedPostID": null
+  },
+  {
+    "initiatorId": 11111,
+    "initiatorName": "bobsmith",
+    "notifType": "Follow",
+    "initiatorProfileImageUrl": "https://defaults.com/default.png",
+    "CreatedAt": "2026-03-04T14:20:00Z",
+    "CommentText": null,
+    "likedPostID": null
+  },
+  {
+    "initiatorId": 22222,
+    "initiatorName": "alice_wonder",
+    "notifType": "Comment",
+    "initiatorProfileImageUrl": "https://media.example.com/profiles/alice.jpg",
+    "CreatedAt": "2026-03-04T12:10:00Z",
+    "CommentText": null,
+    "likedPostID": null
+  }
+]
+```
+
+```json 404 Not Found
+{
+  "error": "No notifications were found"
+}
+```
+
+</ResponseExample>

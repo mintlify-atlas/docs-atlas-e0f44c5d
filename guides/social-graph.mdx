@@ -1,0 +1,246 @@
+---
+title: Social graph
+description: Build follow relationships and manage social connections
+---
+
+## Following users
+
+Create a follow relationship between two users. The initiator becomes a follower of the target user.
+
+```bash
+curl -X POST https://api.example.com/api/users/janedoe/follow \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+This request makes `johndoe` follow `janedoe`.
+
+**Response:**
+
+```
+204 No Content
+```
+
+**What happens:**
+- A new `Follow` record is created with a composite primary key
+- `janedoe`'s follower count is incremented
+- `johndoe`'s following count is incremented
+- A follow notification is sent to `janedoe`
+
+**Error responses:**
+
+- `404 Not Found` - Either user does not exist or action blocked
+- `409 Conflict` - Already following this user
+- `403 Forbidden` - Cannot follow yourself
+
+## Unfollowing users
+
+Remove a follow relationship. This operation uses a transaction to ensure atomicity.
+
+```bash
+curl -X DELETE https://api.example.com/api/users/janedoe/follow \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**What happens:**
+- The `Follow` record is deleted atomically
+- Both follower and following counts are decremented
+- Transaction ensures counts stay consistent
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist or action blocked
+- `409 Conflict` - Not currently following this user
+
+## Getting followers list
+
+Retrieve all followers for a specific user.
+
+```bash
+curl -X GET https://api.example.com/api/users/janedoe/followers \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "followersCount": 2,
+  "Followers": [
+    {
+      "UserId": 123,
+      "userName": "johndoe",
+      "firstName": "John",
+      "lastName": "Doe",
+      "profileImage_MediaUrl": "https://example.com/profiles/john.jpg"
+    },
+    {
+      "UserId": 456,
+      "userName": "alice",
+      "firstName": "Alice",
+      "lastName": "Smith",
+      "profileImage_MediaUrl": "https://defaults.com/default.png"
+    }
+  ]
+}
+```
+
+## Getting following list
+
+Retrieve all accounts that a user is following.
+
+```bash
+curl -X GET https://api.example.com/api/users/johndoe/following \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "followingCount": 1,
+  "Followers": [
+    {
+      "UserId": 789,
+      "userName": "janedoe",
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "profileImage_MediaUrl": "https://example.com/profiles/jane.jpg"
+    }
+  ]
+}
+```
+
+## Blocking users
+
+Block a user to prevent all interactions. Blocked users cannot:
+- See your posts
+- Follow you
+- Like or comment on your content
+
+```bash
+curl -X POST https://api.example.com/api/users/spammer/block \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+This request makes `johndoe` block `spammer`.
+
+**Response:**
+
+```
+204 No Content
+```
+
+**Composite key structure:**
+
+The `BlockedAccount` table uses a composite primary key:
+- `BlockingUserID` - The user who initiated the block
+- `BlockedAccountId` - The user being blocked
+
+This prevents duplicate block records at the database level.
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist
+- `409 Conflict` - Already blocking this user
+- `403 Forbidden` - Cannot block yourself
+
+## Unblocking users
+
+Remove a block to restore normal interactions.
+
+```bash
+curl -X DELETE https://api.example.com/api/users/spammer/block \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist
+- `409 Conflict` - Not currently blocking this user
+
+## Adding close friends
+
+Add a user to your close friends list for special content sharing.
+
+```bash
+curl -X POST https://api.example.com/api/users/janedoe/close-friends \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+This request adds `janedoe` to `johndoe`'s close friends list.
+
+**Response:**
+
+```
+204 No Content
+```
+
+**Composite key structure:**
+
+The `CloseFriend` table uses a composite primary key:
+- `AddingUserID` - The user creating the close friend relationship
+- `CloseFriendAccountId` - The user being added as a close friend
+
+This ensures each close friend relationship is unique.
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist
+- `409 Conflict` - Already added this user as close friend
+- `403 Forbidden` - Cannot add yourself
+
+## Removing close friends
+
+Remove a user from your close friends list.
+
+```bash
+curl -X DELETE https://api.example.com/api/users/janedoe/close-friends \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "userName": "johndoe"
+  }'
+```
+
+**Response:**
+
+```
+204 No Content
+```
+
+**Error responses:**
+
+- `404 Not Found` - User does not exist
+- `409 Conflict` - User not in close friends list

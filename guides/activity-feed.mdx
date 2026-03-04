@@ -1,0 +1,228 @@
+---
+title: Activity feed
+description: Generate and paginate user activity feeds
+---
+
+## Feed concept
+
+The activity feed displays posts from users that the authenticated user follows. Posts are ordered by creation time (most recent first) and paginated using cursor-based pagination.
+
+### How it works
+
+1. Query retrieves all users the requesting user follows
+2. Fetch posts created by those followed users
+3. Order posts by creation time and post ID (descending)
+4. Return paginated results with cursor for next page
+
+## Feed query
+
+Retrieve the activity feed for a user.
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=20" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "Posts": [
+    {
+      "PostID": 12345,
+      "InitiatorID": 789,
+      "Caption": "Beautiful sunset!",
+      "CreatedAt": "2026-03-04T18:30:00Z",
+      "LikeCount": 42,
+      "PostMediasLinks": [
+        {
+          "PostMediaID": 1,
+          "PostID": 12345,
+          "MediaType": "Image",
+          "MediaURL": "https://cdn.example.com/sunset.jpg"
+        }
+      ],
+      "Comments": [],
+      "PostLikes": []
+    }
+  ],
+  "Cursor": "eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTg6MzA6MDBaIiwibGFzdElkIjoxMjM0NX0=",
+  "HasMore": true
+}
+```
+
+## Cursor-based pagination
+
+The feed uses cursor (keyset) pagination instead of offset pagination for better performance and consistency.
+
+### Why cursor pagination?
+
+- **Stable performance at scale**: Avoids scanning/skipping rows like OFFSET does
+- **Consistency under writes**: New posts don't cause duplicates or missing items during pagination
+- **Predictable query cost**: Each page query has similar performance regardless of depth
+
+### Request parameters
+
+- `cursor` (string, optional) - Encoded cursor from previous response. Omit for first page.
+- `limit` (int, optional) - Number of posts per page. Defaults to 20.
+
+### Response structure
+
+- `Posts` (array) - Array of post objects with full details
+- `Cursor` (string, nullable) - Encoded cursor for next page, or `null` if no more posts
+- `HasMore` (boolean) - Whether more posts are available
+
+## Cursor workflow
+
+### Fetching the first page
+
+To get the first page, make a request without a cursor parameter:
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=10" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+The response includes:
+- First 10 posts
+- A `Cursor` value (if more posts exist)
+- `HasMore: true` (if more posts exist)
+
+### Fetching the next page
+
+Use the `Cursor` value from the previous response:
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=10&cursor=eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTg6MzA6MDBaIiwibGFzdElkIjoxMjM0NX0=" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+The cursor encodes:
+- `CreatedAt` - Timestamp of the last post from previous page
+- `PostID` - ID of the last post from previous page
+
+### Cursor format
+
+Cursors are Base64 URL-safe encoded JSON:
+
+```json
+{
+  "dateTime": "2026-03-04T18:30:00Z",
+  "lastId": 12345
+}
+```
+
+Encoded as: `eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTg6MzA6MDBaIiwibGFzdElkIjoxMjM0NX0=`
+
+### Query logic
+
+The feed query uses this WHERE clause for pagination:
+
+```csharp
+query = query.Where(x => 
+    x.CreatedAt < cursorTime || 
+    (x.CreatedAt == cursorTime && x.PostID <= cursorId)
+);
+```
+
+Results are ordered:
+
+```csharp
+.OrderByDescending(p => p.CreatedAt)
+.ThenByDescending(p => p.PostID)
+```
+
+The API fetches `limit + 1` posts to determine if more pages exist, then removes the extra post before returning.
+
+## Full pagination example
+
+### Step 1: Request first page
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=2" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "Posts": [
+    {
+      "PostID": 300,
+      "CreatedAt": "2026-03-04T20:00:00Z",
+      "Caption": "Latest post"
+    },
+    {
+      "PostID": 200,
+      "CreatedAt": "2026-03-04T19:00:00Z",
+      "Caption": "Second post"
+    }
+  ],
+  "Cursor": "eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTk6MDA6MDBaIiwibGFzdElkIjoyMDB9",
+  "HasMore": true
+}
+```
+
+### Step 2: Request next page with cursor
+
+```bash
+curl -X GET "https://api.example.com/api/feed/johndoe?limit=2&cursor=eyJkYXRlVGltZSI6IjIwMjYtMDMtMDRUMTk6MDA6MDBaIiwibGFzdElkIjoyMDB9" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "Posts": [
+    {
+      "PostID": 100,
+      "CreatedAt": "2026-03-04T18:00:00Z",
+      "Caption": "Older post"
+    }
+  ],
+  "Cursor": null,
+  "HasMore": false
+}
+```
+
+No more posts available - pagination complete.
+
+<Note>
+At scale, consider implementing a fan-out strategy where posts are pre-populated into each user's `FeedContent` table when followed users create posts. This trades write complexity for faster read performance.
+</Note>
+
+## Feed generation strategy
+
+The current implementation uses a **pull model** where the feed is generated on-demand by querying posts from followed users.
+
+### Current approach (Pull model)
+
+- Feed is assembled at query time
+- Queries all followed users' posts
+- Filters and sorts in the database
+- Simple to implement, no background processing needed
+
+### Alternative approach (Fan-out model)
+
+For higher scale, consider using the `FeedContent` table:
+
+- When a user creates a post, insert a `FeedContent` record for each follower
+- Feed queries simply read from `FeedContent` (already filtered and sorted)
+- Trades write amplification for faster reads
+- Better for users with many followers and active feeds
+
+**FeedContent structure:**
+
+```csharp
+public class FeedContent
+{
+    public long UserID { get; set; }        // Follower who sees this
+    public long FollowerID { get; set; }    
+    public long FollowedUserID { get; set; }
+    public long PostID { get; set; }        // Post to show in feed
+}
+```
+
+This table enables pre-computed feeds but requires background processing to populate entries when posts are created.

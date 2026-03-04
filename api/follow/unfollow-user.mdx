@@ -1,0 +1,77 @@
+---
+title: "Unfollow user"
+description: "Stop following a user"
+---
+
+## Endpoint
+
+```
+DELETE /api/users/{creatorUsername}/follow
+```
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="creatorUsername" type="string" required>
+  The username of the user to unfollow
+</ParamField>
+
+## Request Body
+
+<ParamField body="userName" type="string" required>
+  The username of the authenticated user initiating the unfollow action
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="number">
+  204 No Content on successful unfollow
+</ResponseField>
+
+### Response Details
+
+When a user successfully unfollows another user:
+- The Follow record is deleted using `ExecuteDeleteAsync` for atomic operation
+- The followed user's `FollowersCount` is decremented
+- The follower's `FollowingCount` is decremented
+- The operation uses database transactions to ensure atomicity
+- Changes are rolled back if any error occurs during the operation
+
+## Request Example
+
+```bash cURL
+curl -X DELETE "https://api.example.com/api/users/johndoe/follow" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "janedoe"
+  }'
+```
+
+## Error Responses
+
+<ResponseField name="404" type="error">
+  Not Found - User does not exist or action cannot be completed due to a block
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  Conflict - Account does not follow this user
+</ResponseField>
+
+### Error Scenarios
+
+- **404 Not Found**: Returned when the initiating account doesn't exist, the target user doesn't exist, or when the action cannot be completed due to a block between users
+- **409 Conflict**: Returned when the user is not currently following the target user
+- **403 Forbidden**: Returned when a user attempts to unfollow themselves
+
+## Implementation Details
+
+The unfollow operation uses database transactions to ensure atomicity:
+- A transaction is started before the delete operation (follow.action.cs:85)
+- The Follow record is deleted using `ExecuteDeleteAsync` (follow.action.cs:88)
+- Follower counts are updated only if the deletion was successful (follow.action.cs:90-94)
+- The transaction is committed if all operations succeed (follow.action.cs:97)
+- The transaction is rolled back if any exception occurs (follow.action.cs:101)

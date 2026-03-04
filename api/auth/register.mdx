@@ -1,0 +1,119 @@
+---
+title: 'Register user'
+description: 'Create a new user account'
+---
+
+## Endpoint
+
+```
+POST /api/register
+```
+
+## Authentication
+
+None - This is a public endpoint.
+
+## Request Body
+
+<ParamField path="userName" type="string" required>
+  Username for the account. Maximum 25 characters. Must be unique.
+</ParamField>
+
+<ParamField path="firstName" type="string" required>
+  User's first name. Maximum 50 characters.
+</ParamField>
+
+<ParamField path="lastName" type="string" required>
+  User's last name. Maximum 50 characters.
+</ParamField>
+
+<ParamField path="passwordHash" type="string" required>
+  Plain text password. The server will hash it automatically using a secure password hasher. Note: Despite the parameter name, send the plain password - not a pre-hashed value.
+</ParamField>
+
+<ParamField path="email" type="string">
+  Email address. Must be a valid email format.
+</ParamField>
+
+<ParamField path="phoneNumber" type="string">
+  Phone number. Must be a valid phone format.
+</ParamField>
+
+## Request Example
+
+```bash
+curl -X POST https://api.example.com/api/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userName": "johndoe",
+    "firstName": "John",
+    "lastName": "Doe",
+    "passwordHash": "SecurePassword123!",
+    "email": "john.doe@example.com",
+    "phoneNumber": "+1234567890"
+  }'
+```
+
+## Response
+
+### Success Response
+
+**Status Code:** `201 Created`
+
+Returns an empty response with a `201 Created` status code indicating the user was successfully registered.
+
+```json
+{}
+```
+
+### Error Responses
+
+**Status Code:** `400 Bad Request`
+
+Returned when validation fails (e.g., missing required fields, invalid email format, field length violations).
+
+**Status Code:** `409 Conflict`
+
+Returned when the username or email is already taken by another user.
+
+## Implementation Details
+
+The registration endpoint creates both a `User` record and an associated `UserProfile` with default settings.
+
+**Source:** `/workspace/source/features/auth/auth.endpoints.cs:10-37`
+
+```csharp
+app.MapPost("/api/register", async (RegisterRequest registerRequest, 
+    SocialMediaDataContext context, 
+    IPasswordHasher<string> passwordHasher) =>
+{
+    string passwordHash = passwordHasher.HashPassword(string.Empty, registerRequest.passwordHash);
+    User newUSer = new User
+    {
+        UserName = registerRequest.userName,
+        FirstName = registerRequest.firstName,
+        LastName = registerRequest.lastName,
+        PasswordHash = passwordHash,
+        Email = registerRequest.email,
+        PhoneNumber = registerRequest.phoneNumber,
+        FollowersCount = default,
+        FollowingCount = default,
+        AccountDeleted = default,
+        DeletedAt = null
+    };
+    newUSer.UserProfile = new UserProfile
+    {
+        User = newUSer,
+        PushNotifications = default,
+        AccountPrivacy = default,
+        Verified = default
+    };
+    context.Users.Add(newUSer);
+    await context.SaveChangesAsync();
+    return Results.Created();
+});
+```
+
+<Note>
+  The password is automatically hashed using ASP.NET Core's `IPasswordHasher` before being stored in the database. Never store plain text passwords.
+</Note>

@@ -1,0 +1,63 @@
+---
+title: "Like post"
+description: "Like a post"
+---
+
+Likes a post and creates a notification for the post owner.
+
+## Endpoint
+
+```
+POST /api/posts/{id}/like
+```
+
+## Authentication
+
+Required. User must be authenticated to like a post.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the post to like (PostID)
+</ParamField>
+
+## Behavior
+
+- Creates a PostLike record with composite key (LikerID, PostID)
+- Increments the post's LikeCount
+- Creates a notification for the post owner
+- Prevents liking posts from blocked accounts
+
+## Request
+
+```bash
+curl -X POST https://api.example.com/api/posts/12345/like \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+## Response
+
+<ResponseField name="status" type="integer">
+  201 Created - Post liked successfully
+</ResponseField>
+
+```json
+201 Created
+```
+
+## Errors
+
+<ResponseField name="404" type="error">
+  Post does not exist or action cannot be completed due to a block
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  The user already liked the post
+</ResponseField>
+
+```json
+{
+  "error": "The user already liked post"
+}
+```

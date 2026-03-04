@@ -1,0 +1,61 @@
+---
+title: "Unsave post"
+description: "Remove a post from your saved collection"
+---
+
+Removes a post from the user's saved collection.
+
+## Endpoint
+
+```
+DELETE /api/posts/{id}/save
+```
+
+## Authentication
+
+Required. User must be authenticated to unsave a post.
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the post to unsave (PostID)
+</ParamField>
+
+## Behavior
+
+- Removes the SavedPost record for the user and post
+- Prevents unsaving posts from blocked accounts
+
+## Request
+
+```bash
+curl -X DELETE https://api.example.com/api/posts/12345/save \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+## Response
+
+<ResponseField name="status" type="integer">
+  204 No Content - Post unsaved successfully
+</ResponseField>
+
+```json
+204 No Content
+```
+
+## Errors
+
+<ResponseField name="404" type="error">
+  Post does not exist or action cannot be completed due to a block
+</ResponseField>
+
+<ResponseField name="409" type="error">
+  The user did not save this post
+</ResponseField>
+
+```json
+{
+  "error": "The user did not save this post"
+}
+```

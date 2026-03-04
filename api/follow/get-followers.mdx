@@ -1,0 +1,97 @@
+---
+title: "Get followers"
+description: "Get the list of users following a specific user"
+---
+
+## Endpoint
+
+```
+GET /api/users/{username}/followers
+```
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="username" type="string" required>
+  The username of the user whose followers you want to retrieve
+</ParamField>
+
+## Response
+
+<ResponseField name="followersCount" type="number">
+  The total number of followers
+</ResponseField>
+
+<ResponseField name="Followers" type="array">
+  Array of follower user objects
+  
+  <Expandable title="Follower Object">
+    <ResponseField name="UserId" type="number">
+      The unique identifier of the follower
+    </ResponseField>
+    
+    <ResponseField name="userName" type="string">
+      The username of the follower
+    </ResponseField>
+    
+    <ResponseField name="firstName" type="string">
+      The first name of the follower
+    </ResponseField>
+    
+    <ResponseField name="lastName" type="string">
+      The last name of the follower
+    </ResponseField>
+    
+    <ResponseField name="profileImage_MediaUrl" type="string">
+      The URL of the follower's profile image. Returns a default image URL if not set.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Request Example
+
+```bash cURL
+curl -X GET "https://api.example.com/api/users/johndoe/followers" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Response Example
+
+```json
+{
+  "followersCount": 2,
+  "Followers": [
+    {
+      "UserId": 123,
+      "userName": "janedoe",
+      "firstName": "Jane",
+      "lastName": "Doe",
+      "profileImage_MediaUrl": "https://example.com/images/janedoe.png"
+    },
+    {
+      "UserId": 456,
+      "userName": "bobsmith",
+      "firstName": "Bob",
+      "lastName": "Smith",
+      "profileImage_MediaUrl": "https://defaults.com/default.png"
+    }
+  ]
+}
+```
+
+## Error Responses
+
+<ResponseField name="404" type="error">
+  Not Found - The specified user account does not exist
+</ResponseField>
+
+## Implementation Details
+
+This endpoint uses an optimized projection query to prevent N+1 query problems:
+- The query first retrieves the follower account IDs (follow.list.cs:9-14)
+- A second query fetches the full user details for those IDs (follow.list.cs:16)
+- `AsNoTracking()` is used for read-only queries to improve performance (follow.list.cs:14)
+- Username comparison is case-insensitive (follow.list.cs:9)
